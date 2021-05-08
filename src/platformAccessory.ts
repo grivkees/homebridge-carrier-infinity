@@ -1,151 +1,201 @@
-import { Service, PlatformAccessory, CharacteristicValue, CharacteristicSetCallback, CharacteristicGetCallback } from 'homebridge';
+import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 
-import { ExampleHomebridgePlatform } from './platform';
+import { CarrierInfinityHomebridgePlatform } from './platform';
 
-/**
- * Platform Accessory
- * An instance of this class is created for each accessory your platform registers
- * Each accessory may expose multiple services of different service types.
- */
-export class ExamplePlatformAccessory {
+import { InfinityEvolutionSystem } from './infinityApi';
+
+export class InfinityEvolutionPlatformAccessory {
   private service: Service;
-
-  /**
-   * These are just used to create a working example
-   * You should implement your own code to track the state of your accessory
-   */
-  private exampleStates = {
-    On: false,
-    Brightness: 100,
-  };
+  private system: InfinityEvolutionSystem;
 
   constructor(
-    private readonly platform: ExampleHomebridgePlatform,
+    private readonly platform: CarrierInfinityHomebridgePlatform,
     private readonly accessory: PlatformAccessory,
   ) {
-
-    // set accessory information
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Default-Manufacturer')
-      .setCharacteristic(this.platform.Characteristic.Model, 'Default-Model')
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, 'Default-Serial');
+      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Default-Manufacturer') // TODO
+      .setCharacteristic(this.platform.Characteristic.Model, 'Default-Model') // TODO
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.serialNumber);
 
-    // get the LightBulb service if it exists, otherwise create a new LightBulb service
-    // you can create multiple services for each accessory
-    this.service = this.accessory.getService(this.platform.Service.Lightbulb) || this.accessory.addService(this.platform.Service.Lightbulb);
+    this.service = this.accessory.getService(
+      this.platform.Service.Thermostat) || this.accessory.addService(this.platform.Service.Thermostat,
+    );
+    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.displayName);
 
-    // set the service name, this is what is displayed as the default name on the Home app
-    // in this example we are using the name we stored in the `accessory.context` in the `discoverDevices` method.
-    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.device.exampleDisplayName);
+    // Create accessory api bridge
+    this.system = new InfinityEvolutionSystem(
+      this.platform.InfinityEvolutionOpenApi,
+      this.accessory.context.serialNumber,
+    );
+        
+    // create handlers
+    // TODO: alot of dup here, can we refactor?
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
+      .onGet(this.handleCurrentHeatingCoolingStateGet.bind(this));
+    
+    this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
+      .onGet(this.handleTargetHeatingCoolingStateGet.bind(this))
+      .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
+    
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+      .onGet(this.handleCurrentTemperatureGet.bind(this));
+    
+    this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+      .onGet(this.handleTargetTemperatureGet.bind(this))
+      .onSet(this.handleTargetTemperatureSet.bind(this));
+    
+    this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
+      .onGet(this.handleTemperatureDisplayUnitsGet.bind(this));
 
-    // each service must implement at-minimum the "required characteristics" for the given service type
-    // see https://developers.homebridge.io/#/service/Lightbulb
+    this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
+      .onGet(this.handleCoolingThresholdTemperatureGet.bind(this))
+      .onSet(this.handleCoolingThresholdTemperatureSet.bind(this));
 
-    // register handlers for the On/Off Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.On)
-      .on('set', this.setOn.bind(this))                // SET - bind to the `setOn` method below
-      .on('get', this.getOn.bind(this));               // GET - bind to the `getOn` method below
+    this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
+      .onGet(this.handleHeatingThresholdTemperatureGet.bind(this))
+      .onSet(this.handleHeatingThresholdTemperatureSet.bind(this));
 
-    // register handlers for the Brightness Characteristic
-    this.service.getCharacteristic(this.platform.Characteristic.Brightness)
-      .on('set', this.setBrightness.bind(this));       // SET - bind to the 'setBrightness` method below
-
-
-    /**
-     * Creating multiple services of the same type.
-     * 
-     * To avoid "Cannot add a Service with the same UUID another Service without also defining a unique 'subtype' property." error,
-     * when creating multiple services of the same type, you need to use the following syntax to specify a name and subtype id:
-     * this.accessory.getService('NAME') || this.accessory.addService(this.platform.Service.Lightbulb, 'NAME', 'USER_DEFINED_SUBTYPE_ID');
-     * 
-     * The USER_DEFINED_SUBTYPE must be unique to the platform accessory (if you platform exposes multiple accessories, each accessory
-     * can use the same sub type id.)
-     */
-
-    // Example: add two "motion sensor" services to the accessory
-    const motionSensorOneService = this.accessory.getService('Motion Sensor One Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor One Name', 'YourUniqueIdentifier-1');
-
-    const motionSensorTwoService = this.accessory.getService('Motion Sensor Two Name') ||
-      this.accessory.addService(this.platform.Service.MotionSensor, 'Motion Sensor Two Name', 'YourUniqueIdentifier-2');
-
-    /**
-     * Updating characteristics values asynchronously.
-     * 
-     * Example showing how to update the state of a Characteristic asynchronously instead
-     * of using the `on('get')` handlers.
-     * Here we change update the motion sensor trigger states on and off every 10 seconds
-     * the `updateCharacteristic` method.
-     * 
-     */
-    let motionDetected = false;
-    setInterval(() => {
-      // EXAMPLE - inverse the trigger
-      motionDetected = !motionDetected;
-
-      // push the new value to HomeKit
-      motionSensorOneService.updateCharacteristic(this.platform.Characteristic.MotionDetected, motionDetected);
-      motionSensorTwoService.updateCharacteristic(this.platform.Characteristic.MotionDetected, !motionDetected);
-
-      this.platform.log.debug('Triggering motionSensorOneService:', motionDetected);
-      this.platform.log.debug('Triggering motionSensorTwoService:', !motionDetected);
-    }, 10000);
   }
 
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, turning on a Light bulb.
-   */
-  setOn(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-
-    // implement your own code to turn your device on/off
-    this.exampleStates.On = value as boolean;
-
-    this.platform.log.debug('Set Characteristic On ->', value);
-
-    // you must call the callback function
-    callback(null);
+  cToF(temp: number): string {
+    return ((9.0 / 5.0 * temp) + 32).toFixed(0);
   }
 
-  /**
-   * Handle the "GET" requests from HomeKit
-   * These are sent when HomeKit wants to know the current state of the accessory, for example, checking if a Light bulb is on.
-   * 
-   * GET requests should return as fast as possbile. A long delay here will result in
-   * HomeKit being unresponsive and a bad user experience in general.
-   * 
-   * If your device takes time to respond you should update the status of your device
-   * asynchronously instead using the `updateCharacteristic` method instead.
-
-   * @example
-   * this.service.updateCharacteristic(this.platform.Characteristic.On, true)
-   */
-  getOn(callback: CharacteristicGetCallback) {
-
-    // implement your own code to check if the device is on
-    const isOn = this.exampleStates.On;
-
-    this.platform.log.debug('Get Characteristic On ->', isOn);
-
-    // you must call the callback function
-    // the first argument should be null if there were no errors
-    // the second argument should be the value to return
-    callback(null, isOn);
+  fToC(temp: number): string {
+    return (5.0 / 9.0 * (temp - 32)).toFixed(4);
   }
 
-  /**
-   * Handle "SET" requests from HomeKit
-   * These are sent when the user changes the state of an accessory, for example, changing the Brightness
-   */
-  setBrightness(value: CharacteristicValue, callback: CharacteristicSetCallback) {
-
-    // implement your own code to set the brightness
-    this.exampleStates.Brightness = value as number;
-
-    this.platform.log.debug('Set Characteristic Brightness -> ', value);
-
-    // you must call the callback function
-    callback(null);
+  // TODO: make a true mapping for these conversions
+  async handleCurrentHeatingCoolingStateGet() {
+    const current_state = await this.system.get('current_state');
+    switch(current_state) {
+      case 'off':
+        return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+      case 'cool':
+        return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
+      case 'heat': // is this needed?
+      case 'gasheat': // TODO: other heat types?
+        return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+      default:
+        throw Error(`Unknown current state ${current_state}`);
+    }
   }
 
+  // TODO: make a true mapping for these conversions
+  async handleTargetHeatingCoolingStateGet() {
+    const target_state = await this.system.get('target_state');
+    switch(target_state) {
+      case 'off':
+        return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+      case 'cool':
+        return this.platform.Characteristic.TargetHeatingCoolingState.COOL;
+      case 'heat':
+        return this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
+      case 'auto':
+        return this.platform.Characteristic.TargetHeatingCoolingState.AUTO;
+      default:
+        throw Error(`Unknown target state ${target_state}`);
+    }
+  }
+
+  async handleTargetHeatingCoolingStateSet(value: CharacteristicValue) {
+    this.platform.log.info('Triggered SET TargetHeatingCoolingState:', value);
+    if (typeof value !== 'number') {
+      throw new Error(`Invalid target temp state ${value}.`);
+    }
+    let target_state: string;
+    switch(value) {
+      case this.platform.Characteristic.TargetHeatingCoolingState.OFF:
+        target_state = 'off'; break;
+      case this.platform.Characteristic.TargetHeatingCoolingState.COOL:
+        target_state = 'cool'; break;
+      case this.platform.Characteristic.TargetHeatingCoolingState.HEAT:
+        target_state = 'heat'; break;
+      case this.platform.Characteristic.TargetHeatingCoolingState.AUTO:
+        target_state = 'auto'; break;
+      default:
+        throw Error(`Unknown target state ${value}`);
+    }
+
+    await this.system.set('target_state', target_state);
+  }
+
+  async handleCurrentTemperatureGet() {
+    const units = await this.system.get('units');
+    const current_temp = await this.system.get('current_temp');
+    return units === 'C' ?
+      current_temp:
+      this.fToC(current_temp);
+
+  }
+
+  async handleTargetTemperatureGet() {
+    const units = await this.system.get('units');
+    const target_temp = await this.system.get('target_temp');
+    return units === 'C' ?
+      target_temp:
+      this.fToC(target_temp);
+  }
+
+  async handleTargetTemperatureSet(value: CharacteristicValue) {
+    const units = await this.system.get('units');
+    if (typeof value !== 'number') {
+      throw new Error(`Invalid target temp value ${value}.`);
+    }
+    await this.system.set(
+      'target_temp',
+      units === 'C' ?
+        value.toFixed(2) :  // TODO: does carrier api support decimal sets?
+        this.cToF(value),
+    );
+  }
+
+  async handleCoolingThresholdTemperatureGet() {
+    const units = await this.system.get('units');
+    const target_cool = await this.system.get('target_cool');
+    return units === 'C' ?
+      target_cool:
+      this.fToC(target_cool);
+  }
+
+  async handleCoolingThresholdTemperatureSet(value: CharacteristicValue) {
+    const units = await this.system.get('units');
+    if (typeof value !== 'number') {
+      throw new Error(`Invalid target temp cool ${value}.`);
+    }
+    await this.system.set(
+      'target_cool',
+      units === 'C' ?
+        value.toFixed(2) :  // TODO: does carrier api support decimal sets?
+        this.cToF(value),
+    );
+  }
+
+  async handleHeatingThresholdTemperatureGet() {
+    const units = await this.system.get('units');
+    const target_heat = await this.system.get('target_heat');
+    return units === 'C' ?
+      target_heat:
+      this.fToC(target_heat);
+  }
+
+  async handleHeatingThresholdTemperatureSet(value: CharacteristicValue) {
+    const units = await this.system.get('units');
+    if (typeof value !== 'number') {
+      throw new Error(`Invalid target temp heat ${value}.`);
+    }
+    await this.system.set(
+      'target_heat',
+      units === 'C' ?
+        value.toFixed(2) :  // TODO: does carrier api support decimal sets?
+        this.cToF(value),
+    );
+  }
+
+  async handleTemperatureDisplayUnitsGet() {
+    const units = await this.system.get('units');
+    return units === 'C' ?
+      this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS :
+      this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
+  }
 }
