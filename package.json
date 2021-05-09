@@ -2,7 +2,7 @@
   "private": true,
   "displayName": "Homebridge Carrier Infinity",
   "name": "homebridge-carrier-infinity",
-  "version": "0.1",
+  "version": "0.1.0",
   "description": "A homebridge plugin for Carrier Infinity and Bryant Evolution A/C systems.",
   "license": "MIT",
   "repository": {
