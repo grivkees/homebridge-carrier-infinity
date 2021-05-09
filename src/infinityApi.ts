@@ -176,8 +176,7 @@ export class InfinityEvolutionSystem {
   }
 
   async set(key: string, value: string) {
-    console.log(`Would be setting ${key} to ${value} if I knew how.`);
     // TODO: actually set stuff back to api
-    return;
+    return key + value;
   }
 }
