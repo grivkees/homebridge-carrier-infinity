@@ -25,11 +25,12 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     ) {
       this.InfinityEvolutionOpenApi = new InfinityEvolutionOpenApi(config['username'], config['password']);
       this.InfinityEvolutionOpenApi.refreshToken()
-        .then(response => {
-          this.log.info(`Login success. Got token ${response}`);
+        .then(() => {
+          this.log.info('Login success.');
         })
         .catch(error => {
           this.log.error('Login error: ', error.message);
+          throw error;
         });
     } else {
       throw new Error('Login credentials not set.');
@@ -41,16 +42,16 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     });
   }
 
-  configureAccessory(accessory: PlatformAccessory) {
+  configureAccessory(accessory: PlatformAccessory): void {
     this.accessories.push(accessory);
   }
 
-  discoverDevices() {
+  discoverDevices(): void {
     this.InfinityEvolutionOpenApi.getSystems()
       .then(systems => {
         for (const name in systems) {
           const serialNumber = systems[name];
-          const uuid = this.api.hap.uuid.generate(serialNumber);
+          const uuid = this.api.hap.uuid.generate(String(serialNumber));
           const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
           if (existingAccessory) {
             new InfinityEvolutionPlatformAccessory(this, existingAccessory);

@@ -57,16 +57,16 @@ export class InfinityEvolutionPlatformAccessory {
 
   }
 
-  cToF(temp: number): string {
-    return ((9.0 / 5.0 * temp) + 32).toFixed(0);
+  cToF(temp: number | string): string {
+    return ((9.0 / 5.0 * Number(temp)) + 32).toFixed(0);
   }
 
-  fToC(temp: number): string {
-    return (5.0 / 9.0 * (temp - 32)).toFixed(4);
+  fToC(temp: number | string): string {
+    return (5.0 / 9.0 * (Number(temp) - 32)).toFixed(4);
   }
 
   // TODO: make a true mapping for these conversions
-  async handleCurrentHeatingCoolingStateGet() {
+  async handleCurrentHeatingCoolingStateGet(): Promise<CharacteristicValue> {
     const current_state = await this.system.get('current_state');
     switch(current_state) {
       case 'off':
@@ -82,7 +82,7 @@ export class InfinityEvolutionPlatformAccessory {
   }
 
   // TODO: make a true mapping for these conversions
-  async handleTargetHeatingCoolingStateGet() {
+  async handleTargetHeatingCoolingStateGet(): Promise<CharacteristicValue> {
     const target_state = await this.system.get('target_state');
     switch(target_state) {
       case 'off':
@@ -98,7 +98,7 @@ export class InfinityEvolutionPlatformAccessory {
     }
   }
 
-  async handleTargetHeatingCoolingStateSet(value: CharacteristicValue) {
+  async handleTargetHeatingCoolingStateSet(value: CharacteristicValue): Promise<void> {
     this.platform.log.info('Triggered SET TargetHeatingCoolingState:', value);
     if (typeof value !== 'number') {
       throw new Error(`Invalid target temp state ${value}.`);
@@ -120,7 +120,7 @@ export class InfinityEvolutionPlatformAccessory {
     await this.system.set('target_state', target_state);
   }
 
-  async handleCurrentTemperatureGet() {
+  async handleCurrentTemperatureGet(): Promise<CharacteristicValue> {
     const units = await this.system.get('units');
     const current_temp = await this.system.get('current_temp');
     return units === 'C' ?
@@ -129,7 +129,7 @@ export class InfinityEvolutionPlatformAccessory {
 
   }
 
-  async handleTargetTemperatureGet() {
+  async handleTargetTemperatureGet(): Promise<CharacteristicValue> {
     const units = await this.system.get('units');
     const target_temp = await this.system.get('target_temp');
     return units === 'C' ?
@@ -137,7 +137,7 @@ export class InfinityEvolutionPlatformAccessory {
       this.fToC(target_temp);
   }
 
-  async handleTargetTemperatureSet(value: CharacteristicValue) {
+  async handleTargetTemperatureSet(value: CharacteristicValue): Promise<void> {
     const units = await this.system.get('units');
     if (typeof value !== 'number') {
       throw new Error(`Invalid target temp value ${value}.`);
@@ -150,7 +150,7 @@ export class InfinityEvolutionPlatformAccessory {
     );
   }
 
-  async handleCoolingThresholdTemperatureGet() {
+  async handleCoolingThresholdTemperatureGet(): Promise<CharacteristicValue> {
     const units = await this.system.get('units');
     const target_cool = await this.system.get('target_cool');
     return units === 'C' ?
@@ -158,7 +158,7 @@ export class InfinityEvolutionPlatformAccessory {
       this.fToC(target_cool);
   }
 
-  async handleCoolingThresholdTemperatureSet(value: CharacteristicValue) {
+  async handleCoolingThresholdTemperatureSet(value: CharacteristicValue): Promise<void> {
     const units = await this.system.get('units');
     if (typeof value !== 'number') {
       throw new Error(`Invalid target temp cool ${value}.`);
@@ -171,7 +171,7 @@ export class InfinityEvolutionPlatformAccessory {
     );
   }
 
-  async handleHeatingThresholdTemperatureGet() {
+  async handleHeatingThresholdTemperatureGet(): Promise<CharacteristicValue> {
     const units = await this.system.get('units');
     const target_heat = await this.system.get('target_heat');
     return units === 'C' ?
@@ -179,7 +179,7 @@ export class InfinityEvolutionPlatformAccessory {
       this.fToC(target_heat);
   }
 
-  async handleHeatingThresholdTemperatureSet(value: CharacteristicValue) {
+  async handleHeatingThresholdTemperatureSet(value: CharacteristicValue): Promise<void> {
     const units = await this.system.get('units');
     if (typeof value !== 'number') {
       throw new Error(`Invalid target temp heat ${value}.`);
@@ -192,7 +192,7 @@ export class InfinityEvolutionPlatformAccessory {
     );
   }
 
-  async handleTemperatureDisplayUnitsGet() {
+  async handleTemperatureDisplayUnitsGet(): Promise<CharacteristicValue> {
     const units = await this.system.get('units');
     return units === 'C' ?
       this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS :

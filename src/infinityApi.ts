@@ -6,11 +6,12 @@ const X_WWW_FORM_URLENCODED_HEADERS_CONFIG = {
     'Content-Type': 'application/x-www-form-urlencoded',
   },
 };
-import Axios, { AxiosInstance } from 'axios';
+import Axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import { Hash } from 'crypto';
 import oauthSignature from 'oauth-signature';
 
 class OAuthHeaders {
-  static genHeader(httpMethod: string, url: string, username: string, token: string) {
+  static genHeader(httpMethod: string, url: string, username: string, token: string): string {
     // Needed for header and sig
     const sig_params = {
       oauth_consumer_key : REACT_APP_INFINITY_CONSUMER_KEY,
@@ -36,8 +37,8 @@ class OAuthHeaders {
     return `OAuth ${header_params.join(',')}`;
   }
 
-  static intercept(config, username, token) {
-    config.headers.Authorization = this.genHeader(config.method, config.url, username, token);
+  static intercept(config: AxiosRequestConfig, username: string, token: string): AxiosRequestConfig {
+    config.headers.Authorization = this.genHeader(config.method || 'GET', config.url || '/', username, token);
     return config;
   }
 }
@@ -64,18 +65,18 @@ export class InfinityEvolutionOpenApi {
     this.axios.interceptors.request.use(config => OAuthHeaders.intercept(config, this.username, this.token));
   }
 
-  async maybeRefreshToken() {
+  async maybeRefreshToken(): Promise<void> {
     // Only refresh if token is old
     if (
       this.token_last_update + (this.token_refresh_days * 24 * 60 * 60 * 1000) <
       Date.now()
     ) {
-      return await this.refreshToken();
+      await this.refreshToken();
     }
     // TODO: if token isn't working, also force refresh
   }
 
-  async refreshToken() {
+  async refreshToken(): Promise<void> {
     const loginxml = '<credentials>'
       + `<username>${this.username}</username>`
       + `<password>${this.password}</password>`
@@ -90,10 +91,9 @@ export class InfinityEvolutionOpenApi {
     // TODO: handle possible errors
     this.token = response.data['result']['accessToken'];
     this.token_last_update = Date.now();
-    return this.token;
   }
 
-  async getSystems() {
+  async getSystems(): Promise<Record<string, string | number>> {
     await this.maybeRefreshToken();
     const systems = {};
     const response = await this.axios.get(`/users/${this.username}/locations`);
@@ -111,7 +111,7 @@ export class InfinityEvolutionOpenApi {
     return systems;
   }
 
-  async getSystemStatus(serialNumber: string) {
+  async getSystemStatus(serialNumber: string): Promise<Record<string, string | number>> {
     await this.maybeRefreshToken();
     const response = await this.axios.get(`/systems/${serialNumber}/status`);
     // TODO: handle errors
@@ -129,7 +129,7 @@ export class InfinityEvolutionOpenApi {
     };
   }
 
-  async getSystemConfig(serialNumber: string) {
+  async getSystemConfig(serialNumber: string): Promise<Record<string, string | number>> {
     await this.maybeRefreshToken();
     const response = await this.axios.get(`/systems/${serialNumber}/config`);
     // TODO: handle errors
@@ -155,7 +155,7 @@ export class InfinityEvolutionSystem {
     this.serialNumber = serialNumber;
   }
 
-  async refresh() {
+  async refresh(): Promise<void> {
     this.storage = Object.assign(
       this.storage,
       await this.InfinityEvolutionOpenApi.getSystemStatus(this.serialNumber),
@@ -164,7 +164,7 @@ export class InfinityEvolutionSystem {
     this.last_update = Date.now();
   }
 
-  async get(key: string) {
+  async get(key: string): Promise<string> {
     if (this.last_update + (this.refresh_seconds * 1000) < Date.now()) {
       await this.refresh();
     }
@@ -175,7 +175,8 @@ export class InfinityEvolutionSystem {
     return this.storage[key];
   }
 
-  async set(key: string, value: string) {
+  // TODO: should be Promise<void>
+  async set(key: string, value: string): Promise<string> {
     // TODO: actually set stuff back to api
     return key + value;
   }
