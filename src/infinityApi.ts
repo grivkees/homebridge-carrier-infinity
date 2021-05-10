@@ -182,11 +182,22 @@ export class InfinityEvolutionSystem {
 
   async get(key: string): Promise<string> {
     await this.refresh();
+    // target_temp is special, since we need to compute it based on mode.
     if (key === 'target_temp') {
-      // TODO: figure out what set point unspecified target type should be based on current state.
-      key = 'target_cool';
+      switch(this.storage['target_state']) {
+        case 'cool':
+          return this.storage['target_cool'];
+        case 'heat':
+          return this.storage['target_heat'];
+        case 'auto':
+          return ((Number(this.storage['target_cool']) + Number(this.storage['target_heat'])) / 2).toFixed(4);
+        default:
+          throw Error(`Unsure how to compute target temp for mode ${this.storage['target_state']}.`);
+      }
+    // for everything else...
+    } else {
+      return this.storage[key];
     }
-    return this.storage[key];
   }
 
   // TODO: should be Promise<void>
