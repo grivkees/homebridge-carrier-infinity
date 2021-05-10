@@ -73,8 +73,10 @@ export class InfinityEvolutionPlatformAccessory {
         return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
       case 'cool':
         return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
-      case 'heat': // is this needed?
-      case 'gasheat': // TODO: other heat types?
+      // Seems like there are different names for different types of heat?
+      case 'heat':
+      case 'gasheat':
+      case 'electric':
         return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
       default:
         throw Error(`Unknown current state ${current_state}`);
