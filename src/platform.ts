@@ -56,13 +56,13 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
           if (existingAccessory) {
             new InfinityEvolutionPlatformAccessory(this, existingAccessory);
             // Pick up any name changes
-            existingAccessory.context.displayName = name;
+            existingAccessory.context.displayName = `${name} Thermostat`;
             // create accessory
             this.api.updatePlatformAccessories([existingAccessory]);
           } else {
             this.log.info('Adding new accessory:', name);
             const accessory = new this.api.platformAccessory(name, uuid);
-            accessory.context.displayName = name;
+            accessory.context.displayName = `${name} Thermostat`;
             accessory.context.serialNumber = serialNumber;
             // create accessory and register
             new InfinityEvolutionPlatformAccessory(this, accessory);
