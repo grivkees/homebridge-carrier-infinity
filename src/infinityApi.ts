@@ -7,7 +7,7 @@ const X_WWW_FORM_URLENCODED_HEADERS_CONFIG = {
   },
 };
 import Axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { Hash } from 'crypto';
+import { Mutex } from 'async-mutex';
 import oauthSignature from 'oauth-signature';
 
 class OAuthHeaders {
@@ -147,6 +147,7 @@ export class InfinityEvolutionSystem {
   private storage = {};
   private refresh_seconds = 60; // TODO: make configurable
   private last_update = 0;
+  private mutex = new Mutex();
 
   constructor(
     private readonly InfinityEvolutionOpenApi: InfinityEvolutionOpenApi,
@@ -156,6 +157,21 @@ export class InfinityEvolutionSystem {
   }
 
   async refresh(): Promise<void> {
+    // If we refreshed recently, don't refresh again.
+    if (this.last_update + (this.refresh_seconds * 1000) > Date.now()) {
+      return;
+    }
+    await this.mutex.runExclusive(async () => {
+      await this._refresh();
+    });
+  }
+
+  async _refresh(): Promise<void> {
+    // We check this again, since its possible it has already been refreshed while
+    // waiting on the lock.
+    if (this.last_update + (this.refresh_seconds * 1000) > Date.now()) {
+      return;
+    }
     this.storage = Object.assign(
       this.storage,
       await this.InfinityEvolutionOpenApi.getSystemStatus(this.serialNumber),
@@ -165,9 +181,7 @@ export class InfinityEvolutionSystem {
   }
 
   async get(key: string): Promise<string> {
-    if (this.last_update + (this.refresh_seconds * 1000) < Date.now()) {
-      await this.refresh();
-    }
+    await this.refresh();
     if (key === 'target_temp') {
       // TODO: figure out what set point unspecified target type should be based on current state.
       key = 'target_cool';
