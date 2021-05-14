@@ -1,11 +1,5 @@
-export const REACT_APP_INFINITY_BASE_URL = 'https://www.app-api.ing.carrier.com';
-export const REACT_APP_INFINITY_CONSUMER_KEY = '8j30j19aj103911h';
-export const REACT_APP_INFINITY_CONSUMER_SECRET = '0f5ur7d89sjv8d45';
-const X_WWW_FORM_URLENCODED_HEADERS_CONFIG = {
-  headers: {
-    'Content-Type': 'application/x-www-form-urlencoded',
-  },
-};
+import { INFINITY_API_BASE_URL, INFINITY_API_CONSUMER_KEY, INFINITY_API_CONSUMER_SECRET } from './settings';
+
 import Axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { Mutex } from 'async-mutex';
 import oauthSignature from 'oauth-signature';
@@ -21,7 +15,7 @@ class OAuthHeaders {
   static genHeader(httpMethod: string, url: string, username: string, token: string): string {
     // Needed for header and sig
     const sig_params = {
-      oauth_consumer_key : REACT_APP_INFINITY_CONSUMER_KEY,
+      oauth_consumer_key : INFINITY_API_CONSUMER_KEY,
       oauth_token : username,
       oauth_signature_method : 'HMAC-SHA1',
       oauth_timestamp : Math.floor(Date.now() / 1000),
@@ -30,7 +24,7 @@ class OAuthHeaders {
       oauth_version : '1.0',
     };
     // Make the sig
-    const signature = oauthSignature.generate(httpMethod, url, sig_params, REACT_APP_INFINITY_CONSUMER_SECRET, token);
+    const signature = oauthSignature.generate(httpMethod, url, sig_params, INFINITY_API_CONSUMER_SECRET, token);
     // Turn into header
     const header_params = [
       `realm=${encodeURIComponent(url)}`,
@@ -63,7 +57,7 @@ export class InfinityEvolutionOpenApi {
     this.password = password;
 
     this.axios = Axios.create({
-      baseURL: REACT_APP_INFINITY_BASE_URL,
+      baseURL: INFINITY_API_BASE_URL,
       headers: {
         featureset: 'CONSUMER_PORTAL',
         Accept: 'application/json',
@@ -93,7 +87,11 @@ export class InfinityEvolutionOpenApi {
     const response = await this.axios.post(
       '/users/authenticated',
       data,
-      X_WWW_FORM_URLENCODED_HEADERS_CONFIG,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      },
     );
     // TODO: handle possible errors
     this.token = response.data['result']['accessToken'];
