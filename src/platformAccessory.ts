@@ -37,24 +37,37 @@ export class InfinityEvolutionPlatformAccessory {
       .onGet(this.handleTargetHeatingCoolingStateGet.bind(this))
       .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
     
-    this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
-      .onGet(this.handleCurrentTemperatureGet.bind(this));
-    
-    this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
-      .onGet(this.handleTargetTemperatureGet.bind(this))
-      .onSet(this.handleTargetTemperatureSet.bind(this));
-    
     this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
       .onGet(this.handleTemperatureDisplayUnitsGet.bind(this));
 
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
+      .onGet(async () => {
+        return await this.handleTempGet('current_temp');
+      });
+    
+    this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
+      .onGet(async () => {
+        return await this.handleTempGet('target_temp');
+      })
+      .onSet(async (value) => {
+        return await this.handleTempSet(value, 'target_temp');
+      });
+    
     this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
-      .onGet(this.handleCoolingThresholdTemperatureGet.bind(this))
-      .onSet(this.handleCoolingThresholdTemperatureSet.bind(this));
+      .onGet(async () => {
+        return await this.handleTempGet('target_cool');
+      })
+      .onSet(async (value) => {
+        return await this.handleTempSet(value, 'target_cool');
+      });
 
     this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
-      .onGet(this.handleHeatingThresholdTemperatureGet.bind(this))
-      .onSet(this.handleHeatingThresholdTemperatureSet.bind(this));
-
+      .onGet(async () => {
+        return await this.handleTempGet('target_heat');
+      })
+      .onSet(async (value) => {
+        return await this.handleTempSet(value, 'target_heat');
+      });
   }
 
   cToF(temp: number | string): string {
@@ -122,72 +135,20 @@ export class InfinityEvolutionPlatformAccessory {
     await this.system.set('target_state', target_state);
   }
 
-  async handleCurrentTemperatureGet(): Promise<CharacteristicValue> {
+  async handleTempGet(key: string): Promise<CharacteristicValue> {
     const units = await this.system.get('units');
-    const current_temp = await this.system.get('current_temp');
-    return units === 'C' ?
-      current_temp:
-      this.fToC(current_temp);
-
+    const temp = await this.system.get(key);
+    return units === 'C' ? temp : this.fToC(temp);
   }
 
-  async handleTargetTemperatureGet(): Promise<CharacteristicValue> {
-    const units = await this.system.get('units');
-    const target_temp = await this.system.get('target_temp');
-    return units === 'C' ?
-      target_temp:
-      this.fToC(target_temp);
-  }
-
-  async handleTargetTemperatureSet(value: CharacteristicValue): Promise<void> {
+  async handleTempSet(value: CharacteristicValue, key: string): Promise<void> {
+    this.platform.log.info(`Set ${key} to ${value}.`);
     const units = await this.system.get('units');
     if (typeof value !== 'number') {
       throw new Error(`Invalid target temp value ${value}.`);
     }
     await this.system.set(
-      'target_temp',
-      units === 'C' ?
-        value.toFixed(2) :  // TODO: does carrier api support decimal sets?
-        this.cToF(value),
-    );
-  }
-
-  async handleCoolingThresholdTemperatureGet(): Promise<CharacteristicValue> {
-    const units = await this.system.get('units');
-    const target_cool = await this.system.get('target_cool');
-    return units === 'C' ?
-      target_cool:
-      this.fToC(target_cool);
-  }
-
-  async handleCoolingThresholdTemperatureSet(value: CharacteristicValue): Promise<void> {
-    const units = await this.system.get('units');
-    if (typeof value !== 'number') {
-      throw new Error(`Invalid target temp cool ${value}.`);
-    }
-    await this.system.set(
-      'target_cool',
-      units === 'C' ?
-        value.toFixed(2) :  // TODO: does carrier api support decimal sets?
-        this.cToF(value),
-    );
-  }
-
-  async handleHeatingThresholdTemperatureGet(): Promise<CharacteristicValue> {
-    const units = await this.system.get('units');
-    const target_heat = await this.system.get('target_heat');
-    return units === 'C' ?
-      target_heat:
-      this.fToC(target_heat);
-  }
-
-  async handleHeatingThresholdTemperatureSet(value: CharacteristicValue): Promise<void> {
-    const units = await this.system.get('units');
-    if (typeof value !== 'number') {
-      throw new Error(`Invalid target temp heat ${value}.`);
-    }
-    await this.system.set(
-      'target_heat',
+      key,
       units === 'C' ?
         value.toFixed(2) :  // TODO: does carrier api support decimal sets?
         this.cToF(value),
