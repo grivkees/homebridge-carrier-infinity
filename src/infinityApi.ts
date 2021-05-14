@@ -10,6 +10,13 @@ import Axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import { Mutex } from 'async-mutex';
 import oauthSignature from 'oauth-signature';
 
+export const SYSTEM_MODE = {
+  OFF: 'off',
+  COOL: 'cool',
+  HEAT: 'heat',
+  AUTO: 'auto',
+};
+
 class OAuthHeaders {
   static genHeader(httpMethod: string, url: string, username: string, token: string): string {
     // Needed for header and sig
@@ -182,8 +189,18 @@ export class InfinityEvolutionSystem {
 
   async get(key: string): Promise<string> {
     await this.refresh();
+    // When it comes to current state, heat can shows up by type of heat
+    if (key === 'current_state') {
+      const value = this.storage[key];
+      switch(value) {
+        case 'gasheat':
+        case 'electrc':
+          return SYSTEM_MODE.HEAT;
+        default:
+          return value;
+      }
     // target_temp is special, since we need to compute it based on mode.
-    if (key === 'target_temp') {
+    } else if (key === 'target_temp') {
       switch(this.storage['target_state']) {
         case 'cool':
           return this.storage['target_cool'];

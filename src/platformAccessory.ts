@@ -2,7 +2,7 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 
 import { CarrierInfinityHomebridgePlatform } from './platform';
 
-import { InfinityEvolutionSystem } from './infinityApi';
+import { InfinityEvolutionSystem, SYSTEM_MODE } from './infinityApi';
 
 export class InfinityEvolutionPlatformAccessory {
   private service: Service;
@@ -29,7 +29,6 @@ export class InfinityEvolutionPlatformAccessory {
     );
         
     // create handlers
-    // TODO: alot of dup here, can we refactor?
     this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
       .onGet(this.handleCurrentHeatingCoolingStateGet.bind(this));
     
@@ -78,35 +77,30 @@ export class InfinityEvolutionPlatformAccessory {
     return (5.0 / 9.0 * (Number(temp) - 32)).toFixed(4);
   }
 
-  // TODO: make a true mapping for these conversions
   async handleCurrentHeatingCoolingStateGet(): Promise<CharacteristicValue> {
     const current_state = await this.system.get('current_state');
     switch(current_state) {
-      case 'off':
+      case SYSTEM_MODE.OFF:
         return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
-      case 'cool':
+      case SYSTEM_MODE.COOL:
         return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
-      // Seems like there are different names for different types of heat?
-      case 'heat':
-      case 'gasheat':
-      case 'electric':
+      case SYSTEM_MODE.HEAT:
         return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
       default:
         throw Error(`Unknown current state ${current_state}`);
     }
   }
 
-  // TODO: make a true mapping for these conversions
   async handleTargetHeatingCoolingStateGet(): Promise<CharacteristicValue> {
     const target_state = await this.system.get('target_state');
     switch(target_state) {
-      case 'off':
+      case SYSTEM_MODE.OFF:
         return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
-      case 'cool':
+      case SYSTEM_MODE.COOL:
         return this.platform.Characteristic.TargetHeatingCoolingState.COOL;
-      case 'heat':
+      case SYSTEM_MODE.HEAT:
         return this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
-      case 'auto':
+      case SYSTEM_MODE.AUTO:
         return this.platform.Characteristic.TargetHeatingCoolingState.AUTO;
       default:
         throw Error(`Unknown target state ${target_state}`);
@@ -121,13 +115,13 @@ export class InfinityEvolutionPlatformAccessory {
     let target_state: string;
     switch(value) {
       case this.platform.Characteristic.TargetHeatingCoolingState.OFF:
-        target_state = 'off'; break;
+        target_state = SYSTEM_MODE.OFF; break;
       case this.platform.Characteristic.TargetHeatingCoolingState.COOL:
-        target_state = 'cool'; break;
+        target_state = SYSTEM_MODE.COOL; break;
       case this.platform.Characteristic.TargetHeatingCoolingState.HEAT:
-        target_state = 'heat'; break;
+        target_state = SYSTEM_MODE.HEAT; break;
       case this.platform.Characteristic.TargetHeatingCoolingState.AUTO:
-        target_state = 'auto'; break;
+        target_state = SYSTEM_MODE.AUTO; break;
       default:
         throw Error(`Unknown target state ${value}`);
     }
