@@ -3,6 +3,7 @@ import { INFINITY_API_BASE_URL, INFINITY_API_CONSUMER_KEY, INFINITY_API_CONSUMER
 import Axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import oauthSignature from 'oauth-signature';
 import { MemoizeExpiring } from 'typescript-memoize';
+import { Mutex } from 'async-mutex';
 import * as xml2js from 'xml2js';
 
 export const SYSTEM_MODE = {
@@ -106,10 +107,13 @@ export class InfinityEvolutionApi {
 abstract class BaseInfinityEvolutionApiModel {
   // TODO make unknown and handle type checking in getters
   protected data_object: any = null;
+  protected write_lock: Mutex;
 
   constructor(
     protected readonly InfinityEvolutionApi: InfinityEvolutionApi,
-  ) {}
+  ) {
+    this.write_lock = new Mutex();
+  }
 
   abstract getPath(): string;
 
@@ -125,13 +129,18 @@ abstract class BaseInfinityEvolutionApiModel {
     this.data_object = await xml2js.parseStringPromise(response.data);
   }
 
-  // TODO mutex to make sure no multiple pushes. or better yet, fail if push already happening.
+  
   async push(): Promise<void> {
+    await this.write_lock.runExclusive(async () => {
+      await this.pushUnsafe();
+    });
+  }
+
+  private async pushUnsafe(): Promise<void> {
     const builder = new xml2js.Builder();
     const new_xml = builder.buildObject(this.data_object);
     const data = `data=${encodeURIComponent(new_xml)}`;
     // TODO: handle errors
-    console.warn(`${Date.now()}: Pushing changes to api`);
     await this.InfinityEvolutionApi.axios.post(
       this.getPath(),
       data,
@@ -253,6 +262,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     }
   }
 
+  // TODO: this is unsafe if clsp and htsp are called at the same time, one could undo the other.
   async setZoneSetpoints(
     zone = 0,
     clsp: number | null,
@@ -279,7 +289,6 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     if (htsp) {
       this.data_object.config.zones[0].zone[zone.toString()]['activities'][0].activity[i]['htsp'][0] = htsp.toFixed(1);
     }
-    console.dir(this.data_object.config.zones[0].zone[zone.toString()]['activities'][0].activity[i]);
     await this.push();
   }
 }

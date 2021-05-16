@@ -27,6 +27,7 @@
     "homebridge-plugin"
   ],
   "dependencies": {
+    "async-mutex": "*",
     "axios": "*",
     "oauth-signature": "*",
     "xml2js": "*",

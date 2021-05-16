@@ -67,19 +67,27 @@ export class InfinityEvolutionPlatformAccessory {
         }
       })
       .onSet(async (value) => {
+        // Ignore events with no value change
+        if (value === this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).value) {
+          return;
+        }
+
+        // Confirm is number, maybe convert to F
         if (typeof value !== 'number') {
           throw new Error(`Invalid target temp value ${value}.`);
         }
         if (await this.system_status.getUnits() === 'F') {
           value = this.cToF(value);
         }
+
+        // Call Api
         const cmode = await this.system_config.getMode();
         switch (cmode) {
           case SYSTEM_MODE.COOL:
           case SYSTEM_MODE.HEAT:
             return await this.system_config.setZoneSetpoints(0, value, value);
           default:
-            return await this.system_config.setZoneSetpoints(0, value + 1, value - 1);
+            return;
         }
       });
     
@@ -88,12 +96,20 @@ export class InfinityEvolutionPlatformAccessory {
         return await this.handleTempGet(await this.system_status.getZoneCoolSetpoint());
       })
       .onSet(async (value) => {
+        // Ignore events with no value change
+        if (value === this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value) {
+          return;
+        }
+
+        // Confirm is number, maybe convert to F
         if (typeof value !== 'number') {
           throw new Error(`Invalid target temp value ${value}.`);
         }
         if (await this.system_status.getUnits() === 'F') {
           value = this.cToF(value);
         }
+
+        // Call Api
         return await this.system_config.setZoneSetpoints(0, value, null); 
       });
 
@@ -102,12 +118,20 @@ export class InfinityEvolutionPlatformAccessory {
         return await this.handleTempGet(await this.system_status.getZoneHeatSetpoint());
       })
       .onSet(async (value) => {
+        // Ignore events with no value change
+        if (value === this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value) {
+          return;
+        }
+
+        // Confirm is number, maybe convert to F
         if (typeof value !== 'number') {
           throw new Error(`Invalid target temp value ${value}.`);
         }
         if (await this.system_status.getUnits() === 'F') {
           value = this.cToF(value);
         }
+
+        // Call Api
         return await this.system_config.setZoneSetpoints(0, null, value); 
       });
   }
@@ -151,6 +175,11 @@ export class InfinityEvolutionPlatformAccessory {
   }
 
   async handleTargetHeatingCoolingStateSet(value: CharacteristicValue): Promise<void> {
+    // Ignore events with no value change
+    if (value === this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).value) {
+      return;
+    }
+
     if (typeof value !== 'number') {
       throw new Error(`Invalid target temp state ${value}.`);
     }
