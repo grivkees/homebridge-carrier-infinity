@@ -25,12 +25,12 @@ export class InfinityEvolutionPlatformAccessory {
 
     // Create accessory api bridge
     this.system_status = new InfinityEvolutionSystemStatus(
-      this.platform.InfinityEvolutionOpenApi,
+      this.platform.InfinityEvolutionApi,
       this.accessory.context.serialNumber,
     );
     this.system_status.fetch().then();
     this.system_config = new InfinityEvolutionSystemConfig(
-      this.platform.InfinityEvolutionOpenApi,
+      this.platform.InfinityEvolutionApi,
       this.accessory.context.serialNumber,
     );
     this.system_config.fetch().then();

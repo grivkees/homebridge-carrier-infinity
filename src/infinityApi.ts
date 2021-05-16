@@ -45,18 +45,13 @@ class OAuthHeaders {
   }
 }
 
-export class InfinityEvolutionOpenApi {
+export class InfinityEvolutionApi {
   private token = '';
-  private token_refresh_days = 30;
-  private token_last_update = 0;
-  public username: string;
-  private password: string;
   public axios: AxiosInstance;
 
-  constructor(username: string, password: string) {
-    this.username = username;
-    this.password = password;
-
+  constructor(
+    public username: string,
+    private password: string) {
     this.axios = Axios.create({
       baseURL: INFINITY_API_BASE_URL,
       headers: {
@@ -67,18 +62,13 @@ export class InfinityEvolutionOpenApi {
     this.axios.interceptors.request.use(config => OAuthHeaders.intercept(config, this.username, this.token));
   }
 
-  async maybeRefreshToken(): Promise<void> {
-    // Only refresh if token is old
-    if (
-      this.token_last_update + (this.token_refresh_days * 24 * 60 * 60 * 1000) <
-      Date.now()
-    ) {
-      await this.refreshToken();
-    }
-    // TODO: if token isn't working, also force refresh
+  @MemoizeExpiring(24 * 60 * 60 * 1000) // every 24 hrs
+  async refreshToken(): Promise<void> {
+    await this.forceRefreshToken();
   }
 
-  async refreshToken(): Promise<void> {
+  // TODO: on some api errors, force a refresh
+  private async forceRefreshToken(): Promise<void> {
     const loginxml = '<credentials>'
       + `<username>${this.username}</username>`
       + `<password>${this.password}</password>`
@@ -97,16 +87,15 @@ export class InfinityEvolutionOpenApi {
     );
     // TODO: handle possible errors
     this.token = response.data['result']['accessToken'];
-    this.token_last_update = Date.now();
   }
 }
 
-abstract class BaseInfinityEvolutionApi {
+abstract class BaseInfinityEvolutionApiModel {
   // TODO make unknown and handle type checking in getters
   protected data_object: any = null;
 
   constructor(
-    protected readonly InfinityEvolutionOpenApi: InfinityEvolutionOpenApi,
+    protected readonly InfinityEvolutionApi: InfinityEvolutionApi,
   ) {}
 
   abstract getPath(): string;
@@ -117,9 +106,9 @@ abstract class BaseInfinityEvolutionApi {
   }
 
   protected async forceFetch(): Promise<void> {
-    await this.InfinityEvolutionOpenApi.maybeRefreshToken();
+    await this.InfinityEvolutionApi.refreshToken();
     // TODO: handle errors
-    const response = await this.InfinityEvolutionOpenApi.axios.get(this.getPath());
+    const response = await this.InfinityEvolutionApi.axios.get(this.getPath());
     this.data_object = await xml2js.parseStringPromise(response.data);
   }
 
@@ -131,13 +120,13 @@ abstract class BaseInfinityEvolutionApi {
   }
 }
 
-export class InfinityEvolutionLocations extends BaseInfinityEvolutionApi {
-  constructor(api: InfinityEvolutionOpenApi) {
+export class InfinityEvolutionLocations extends BaseInfinityEvolutionApiModel {
+  constructor(api: InfinityEvolutionApi) {
     super(api);
   }
 
   getPath(): string {
-    return `/users/${this.InfinityEvolutionOpenApi.username}/locations`;
+    return `/users/${this.InfinityEvolutionApi.username}/locations`;
   }
 
   async getSystems(): Promise<Record<string, string>> {
@@ -157,19 +146,19 @@ export class InfinityEvolutionLocations extends BaseInfinityEvolutionApi {
   }
 }
 
-abstract class BaseInfinityEvolutionSystemApi extends BaseInfinityEvolutionApi {
+abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolutionApiModel {
   protected data_object: any = null;
 
   constructor(
-    api: InfinityEvolutionOpenApi,
+    api: InfinityEvolutionApi,
     public readonly serialNumber: string,
   ) {
     super(api);
   }
 }
 
-export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemApi {
-  constructor(api: InfinityEvolutionOpenApi, serialNumber: string) {
+export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemApiModel {
+  constructor(api: InfinityEvolutionApi, serialNumber: string) {
     super(api, serialNumber);
   }
 
@@ -217,8 +206,8 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
   }
 }
 
-export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemApi {
-  constructor(api: InfinityEvolutionOpenApi, serialNumber: string) {
+export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemApiModel {
+  constructor(api: InfinityEvolutionApi, serialNumber: string) {
     super(api, serialNumber);
   }
 

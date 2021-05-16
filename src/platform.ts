@@ -2,7 +2,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { InfinityEvolutionPlatformAccessory } from './platformAccessory';
-import { InfinityEvolutionOpenApi, InfinityEvolutionLocations } from './infinityApi';
+import { InfinityEvolutionApi, InfinityEvolutionLocations } from './infinityApi';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -12,7 +12,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   public readonly accessories: PlatformAccessory[] = [];
 
   // carrier/bryant api
-  public InfinityEvolutionOpenApi: InfinityEvolutionOpenApi;
+  public InfinityEvolutionApi: InfinityEvolutionApi;
 
   constructor(
     public readonly log: Logger,
@@ -23,8 +23,8 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       typeof config['username'] === 'string' &&
       typeof config['password'] === 'string'
     ) {
-      this.InfinityEvolutionOpenApi = new InfinityEvolutionOpenApi(config['username'], config['password']);
-      this.InfinityEvolutionOpenApi.refreshToken()
+      this.InfinityEvolutionApi = new InfinityEvolutionApi(config['username'], config['password']);
+      this.InfinityEvolutionApi.refreshToken()
         .then(() => {
           this.log.info('Login success.');
         })
@@ -47,7 +47,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   }
 
   discoverDevices(): void {
-    new InfinityEvolutionLocations(this.InfinityEvolutionOpenApi).getSystems()
+    new InfinityEvolutionLocations(this.InfinityEvolutionApi).getSystems()
       .then(systems => {
         for (const name in systems) {
           const serialNumber = systems[name];
