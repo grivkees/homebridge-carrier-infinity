@@ -1,8 +1,9 @@
 import { INFINITY_API_BASE_URL, INFINITY_API_CONSUMER_KEY, INFINITY_API_CONSUMER_SECRET } from './settings';
 
 import Axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import { Mutex } from 'async-mutex';
 import oauthSignature from 'oauth-signature';
+import { MemoizeExpiring } from 'typescript-memoize';
+import * as xml2js from 'xml2js';
 
 export const SYSTEM_MODE = {
   OFF: 'off',
@@ -48,9 +49,9 @@ export class InfinityEvolutionOpenApi {
   private token = '';
   private token_refresh_days = 30;
   private token_last_update = 0;
-  private username: string;
+  public username: string;
   private password: string;
-  private axios: AxiosInstance;
+  public axios: AxiosInstance;
 
   constructor(username: string, password: string) {
     this.username = username;
@@ -60,7 +61,7 @@ export class InfinityEvolutionOpenApi {
       baseURL: INFINITY_API_BASE_URL,
       headers: {
         featureset: 'CONSUMER_PORTAL',
-        Accept: 'application/json',
+        Accept: 'application/xml',
       },
     });
     this.axios.interceptors.request.use(config => OAuthHeaders.intercept(config, this.username, this.token));
@@ -90,6 +91,7 @@ export class InfinityEvolutionOpenApi {
       {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
         },
       },
     );
@@ -97,127 +99,147 @@ export class InfinityEvolutionOpenApi {
     this.token = response.data['result']['accessToken'];
     this.token_last_update = Date.now();
   }
+}
 
-  async getSystems(): Promise<Record<string, string | number>> {
-    await this.maybeRefreshToken();
-    const systems = {};
-    const response = await this.axios.get(`/users/${this.username}/locations`);
+abstract class BaseInfinityEvolutionApi {
+  // TODO make unknown and handle type checking in getters
+  protected data_object: any = null;
+
+  constructor(
+    protected readonly InfinityEvolutionOpenApi: InfinityEvolutionOpenApi,
+  ) {}
+
+  abstract getPath(): string;
+
+  @MemoizeExpiring(30 * 1000)
+  async fetch(): Promise<void> {
+    await this.forceFetch();
+  }
+
+  protected async forceFetch(): Promise<void> {
+    await this.InfinityEvolutionOpenApi.maybeRefreshToken();
     // TODO: handle errors
-    const locations = response.data.locations.location;
+    const response = await this.InfinityEvolutionOpenApi.axios.get(this.getPath());
+    this.data_object = await xml2js.parseStringPromise(response.data);
+  }
+
+  async push(): Promise<void> {
+    const builder = new xml2js.Builder();
+    const new_xml = builder.buildObject(this.data_object);
+    // TODO: POST new_xml back
+    console.log(new_xml);
+  }
+}
+
+export class InfinityEvolutionLocations extends BaseInfinityEvolutionApi {
+  constructor(api: InfinityEvolutionOpenApi) {
+    super(api);
+  }
+
+  getPath(): string {
+    return `/users/${this.InfinityEvolutionOpenApi.username}/locations`;
+  }
+
+  async getSystems(): Promise<Record<string, string>> {
+    await this.fetch();
+    const systems = {};
+    const locations = this.data_object.locations.location;
     for (const i in locations) {
       const locaton = locations[i];
       for (const j in locaton.systems) {
-        const system = locaton.systems[j][0];
-        const linkparts = system['atom:link']['$']['href'].split('/');
-        const name = system['atom:link']['$']['title'];
+        const system = locaton.systems[j].system[0];
+        const linkparts = system['atom:link'][0]['$']['href'].split('/');
+        const name = system['atom:link'][0]['$']['title'];
         systems[name] = linkparts[linkparts.length - 1];
       }
     }
     return systems;
   }
+}
 
-  async getSystemStatus(serialNumber: string): Promise<Record<string, string | number>> {
-    await this.maybeRefreshToken();
-    const response = await this.axios.get(`/systems/${serialNumber}/status`);
-    // TODO: handle errors
-    const status = response.data.status;
-    // TODO: support other zones?
-    const zone1 = status.zones.zone[0];
-    return {
-      units: status.cfgem,
-      current_state: status.mode,
-      current_temp: zone1.rt,
-      target_cool: zone1.clsp,
-      target_heat: zone1.htsp,
-      current_rh: zone1.rh,
-      target_rh: status.humlvl,
-    };
-  }
+abstract class BaseInfinityEvolutionSystemApi extends BaseInfinityEvolutionApi {
+  protected data_object: any = null;
 
-  async getSystemConfig(serialNumber: string): Promise<Record<string, string | number>> {
-    await this.maybeRefreshToken();
-    const response = await this.axios.get(`/systems/${serialNumber}/config`);
-    // TODO: handle errors
-    const config = response.data.config;
-    // activities and schedules also live here
-    return {
-      units: config.cfgem,
-      target_state: config.mode,
-    };
+  constructor(
+    api: InfinityEvolutionOpenApi,
+    public readonly serialNumber: string,
+  ) {
+    super(api);
   }
 }
 
-export class InfinityEvolutionSystem {
-  private serialNumber: string;
-  private storage = {};
-  private refresh_seconds = 60; // TODO: make configurable
-  private last_update = 0;
-  private mutex = new Mutex();
-
-  constructor(
-    private readonly InfinityEvolutionOpenApi: InfinityEvolutionOpenApi,
-    serialNumber: string,
-  ) {
-    this.serialNumber = serialNumber;
+export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemApi {
+  constructor(api: InfinityEvolutionOpenApi, serialNumber: string) {
+    super(api, serialNumber);
   }
 
-  async refresh(): Promise<void> {
-    // If we refreshed recently, don't refresh again.
-    if (this.last_update + (this.refresh_seconds * 1000) > Date.now()) {
-      return;
-    }
-    await this.mutex.runExclusive(async () => {
-      await this._refresh();
-    });
+  getPath(): string {
+    return `/systems/${this.serialNumber}/status`;
   }
 
-  async _refresh(): Promise<void> {
-    // We check this again, since its possible it has already been refreshed while
-    // waiting on the lock.
-    if (this.last_update + (this.refresh_seconds * 1000) > Date.now()) {
-      return;
-    }
-    this.storage = Object.assign(
-      this.storage,
-      await this.InfinityEvolutionOpenApi.getSystemStatus(this.serialNumber),
-      await this.InfinityEvolutionOpenApi.getSystemConfig(this.serialNumber),
-    );
-    this.last_update = Date.now();
+  async getUnits(): Promise<string> {
+    await this.fetch();
+    return this.data_object.status.cfgem[0];
   }
 
-  async get(key: string): Promise<string> {
-    await this.refresh();
-    // When it comes to current state, heat can shows up by type of heat
-    if (key === 'current_state') {
-      const value = this.storage[key];
-      switch(value) {
-        case 'gasheat':
-        case 'electrc':
-          return SYSTEM_MODE.HEAT;
-        default:
-          return value;
-      }
-    // target_temp is special, since we need to compute it based on mode.
-    } else if (key === 'target_temp') {
-      switch(this.storage['target_state']) {
-        case 'cool':
-          return this.storage['target_cool'];
-        case 'heat':
-          return this.storage['target_heat'];
-        case 'auto':
-          return ((Number(this.storage['target_cool']) + Number(this.storage['target_heat'])) / 2).toFixed(4);
-        default:
-          throw Error(`Unsure how to compute target temp for mode ${this.storage['target_state']}.`);
-      }
-    // for everything else...
-    } else {
-      return this.storage[key];
+  async getMode(): Promise<string> {
+    await this.fetch();
+    const raw_mode = this.data_object.status.mode[0];
+    switch(raw_mode) {
+      case 'gasheat':
+      case 'electrc':
+        return SYSTEM_MODE.HEAT;
+      default:
+        return raw_mode;
     }
   }
 
-  // TODO: should be Promise<void>
-  async set(key: string, value: string): Promise<string> {
-    // TODO: actually set stuff back to api
-    return key + value;
+  private async getZone(zone: number): Promise<Record<string, string>> {
+    await this.fetch();
+    return this.data_object.status.zones[0].zone[zone.toString()];
+  }
+
+  async getZoneTemp(zone = 0): Promise<number> {
+    return Number((await this.getZone(zone)).rt[0]);
+  }
+
+  async getZoneSetpoint(zone = 0): Promise<number> {
+    // TODO make based on mode
+    return Number((await this.getZone(zone)).clsp[0]);
+  }
+
+  async getZoneCoolSetpoint(zone = 0): Promise<number> {
+    return Number((await this.getZone(zone)).clsp[0]);
+  }
+
+  async getZoneHeatSetpoint(zone = 0): Promise<number> {
+    return Number((await this.getZone(zone)).htsp[0]);
+  }
+}
+
+export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemApi {
+  constructor(api: InfinityEvolutionOpenApi, serialNumber: string) {
+    super(api, serialNumber);
+  }
+
+  getPath(): string {
+    return `/systems/${this.serialNumber}/config`;
+  }
+
+  async getUnits(): Promise<string> {
+    await this.fetch();
+    return this.data_object.config.cfgem[0];
+  }
+
+  async getMode(): Promise<string> {
+    await this.fetch();
+    return this.data_object.config.mode[0];
+  }
+
+  // TODO: this should have a mutex on it
+  async set(key: string, value: string): Promise<void> {
+    await this.forceFetch();
+    // TODO modify this.data_object
+    await this.push();
   }
 }

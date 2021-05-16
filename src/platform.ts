@@ -2,7 +2,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { InfinityEvolutionPlatformAccessory } from './platformAccessory';
-import { InfinityEvolutionOpenApi } from './infinityApi';
+import { InfinityEvolutionOpenApi, InfinityEvolutionLocations } from './infinityApi';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -47,7 +47,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   }
 
   discoverDevices(): void {
-    this.InfinityEvolutionOpenApi.getSystems()
+    new InfinityEvolutionLocations(this.InfinityEvolutionOpenApi).getSystems()
       .then(systems => {
         for (const name in systems) {
           const serialNumber = systems[name];
