@@ -192,11 +192,6 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     return Number((await this.getZone(zone)).rt[0]);
   }
 
-  async getZoneSetpoint(zone = 0): Promise<number> {
-    // TODO make based on mode
-    return Number((await this.getZone(zone)).clsp[0]);
-  }
-
   async getZoneCoolSetpoint(zone = 0): Promise<number> {
     return Number((await this.getZone(zone)).clsp[0]);
   }
