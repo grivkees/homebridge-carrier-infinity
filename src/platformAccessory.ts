@@ -67,7 +67,20 @@ export class InfinityEvolutionPlatformAccessory {
         }
       })
       .onSet(async (value) => {
-        return await this.handleTempSet(value, 'target_temp');
+        if (typeof value !== 'number') {
+          throw new Error(`Invalid target temp value ${value}.`);
+        }
+        if (await this.system_status.getUnits() === 'F') {
+          value = this.cToF(value);
+        }
+        const cmode = await this.system_config.getMode();
+        switch (cmode) {
+          case SYSTEM_MODE.COOL:
+          case SYSTEM_MODE.HEAT:
+            return await this.system_config.setZoneSetpoints(0, value, value);
+          default:
+            return await this.system_config.setZoneSetpoints(0, value + 1, value - 1);
+        }
       });
     
     this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
@@ -75,7 +88,13 @@ export class InfinityEvolutionPlatformAccessory {
         return await this.handleTempGet(await this.system_status.getZoneCoolSetpoint());
       })
       .onSet(async (value) => {
-        return await this.handleTempSet(value, 'target_cool');
+        if (typeof value !== 'number') {
+          throw new Error(`Invalid target temp value ${value}.`);
+        }
+        if (await this.system_status.getUnits() === 'F') {
+          value = this.cToF(value);
+        }
+        return await this.system_config.setZoneSetpoints(0, value, null); 
       });
 
     this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
@@ -83,16 +102,22 @@ export class InfinityEvolutionPlatformAccessory {
         return await this.handleTempGet(await this.system_status.getZoneHeatSetpoint());
       })
       .onSet(async (value) => {
-        return await this.handleTempSet(value, 'target_heat');
+        if (typeof value !== 'number') {
+          throw new Error(`Invalid target temp value ${value}.`);
+        }
+        if (await this.system_status.getUnits() === 'F') {
+          value = this.cToF(value);
+        }
+        return await this.system_config.setZoneSetpoints(0, null, value); 
       });
   }
 
-  cToF(temp: number | string): string {
-    return ((9.0 / 5.0 * Number(temp)) + 32).toFixed(0);
+  cToF(temp: number): number {
+    return (9.0 / 5.0 * temp) + 32;
   }
 
-  fToC(temp: number | string): string {
-    return (5.0 / 9.0 * (Number(temp) - 32)).toFixed(4);
+  fToC(temp: number): number {
+    return 5.0 / 9.0 * (temp - 32);
   }
 
   async handleCurrentHeatingCoolingStateGet(): Promise<CharacteristicValue> {
@@ -126,7 +151,6 @@ export class InfinityEvolutionPlatformAccessory {
   }
 
   async handleTargetHeatingCoolingStateSet(value: CharacteristicValue): Promise<void> {
-    this.platform.log.info('Triggered SET TargetHeatingCoolingState:', value);
     if (typeof value !== 'number') {
       throw new Error(`Invalid target temp state ${value}.`);
     }
@@ -144,26 +168,14 @@ export class InfinityEvolutionPlatformAccessory {
         throw Error(`Unknown target state ${value}`);
     }
 
-    await this.system_config.set('target_state', target_state);
+    await this.system_config.setMode(target_state);
   }
 
   async handleTempGet(value: number): Promise<CharacteristicValue> {
-    const units = await this.system_status.getUnits();
-    return units === 'C' ? value : this.fToC(value);
-  }
-
-  async handleTempSet(value: CharacteristicValue, key: string): Promise<void> {
-    this.platform.log.info(`Set ${key} to ${value}.`);
-    const units = await this.system_status.getUnits();
-    if (typeof value !== 'number') {
-      throw new Error(`Invalid target temp value ${value}.`);
+    if (await this.system_status.getUnits() === 'F') {
+      value = this.fToC(value);
     }
-    await this.system_config.set(
-      key,
-      units === 'C' ?
-        value.toFixed(2) :  // TODO: does carrier api support decimal sets?
-        this.cToF(value),
-    );
+    return value;
   }
 
   async handleTemperatureDisplayUnitsGet(): Promise<CharacteristicValue> {

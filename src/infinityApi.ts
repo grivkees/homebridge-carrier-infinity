@@ -13,9 +13,9 @@ export const SYSTEM_MODE = {
 };
 
 class OAuthHeaders {
-  static genHeader(httpMethod: string, url: string, username: string, token: string): string {
+  static genHeader(httpMethod: string, url: string, username: string, token: string, data: string | null): string {
     // Needed for header and sig
-    const sig_params = {
+    const sig_header_params = {
       oauth_consumer_key : INFINITY_API_CONSUMER_KEY,
       oauth_token : username,
       oauth_signature_method : 'HMAC-SHA1',
@@ -24,13 +24,26 @@ class OAuthHeaders {
       oauth_nonce : Math.floor(Math.random() * 100000000000) + 1,
       oauth_version : '1.0',
     };
+
+    // If there is post data, we need to include it
+    const sig_body_params = {};
+    if (data) {
+      const pairs = data.split('&');
+      for (const i in pairs) {
+        const pair = pairs[i].split('=');
+        sig_body_params[pair[0]] = decodeURIComponent(pair[1]);
+      }
+    }
+    const sig_params = Object.assign({}, sig_header_params, sig_body_params);
+
+
     // Make the sig
     const signature = oauthSignature.generate(httpMethod, url, sig_params, INFINITY_API_CONSUMER_SECRET, token);
     // Turn into header
     const header_params = [
       `realm=${encodeURIComponent(url)}`,
     ];
-    for (const k in sig_params) {
+    for (const k in sig_header_params) {
       header_params.push(
         `${k}=${sig_params[k]}`,
       );
@@ -40,7 +53,7 @@ class OAuthHeaders {
   }
 
   static intercept(config: AxiosRequestConfig, username: string, token: string): AxiosRequestConfig {
-    config.headers.Authorization = this.genHeader(config.method || 'GET', config.url || '/', username, token);
+    config.headers.Authorization = this.genHeader(config.method || 'GET', config.url || '/', username, token, config.data);
     return config;
   }
 }
@@ -112,11 +125,23 @@ abstract class BaseInfinityEvolutionApiModel {
     this.data_object = await xml2js.parseStringPromise(response.data);
   }
 
+  // TODO mutex to make sure no multiple pushes. or better yet, fail if push already happening.
   async push(): Promise<void> {
     const builder = new xml2js.Builder();
     const new_xml = builder.buildObject(this.data_object);
-    // TODO: POST new_xml back
-    console.log(new_xml);
+    const data = `data=${encodeURIComponent(new_xml)}`;
+    // TODO: handle errors
+    console.warn(`${Date.now()}: Pushing changes to api`);
+    await this.InfinityEvolutionApi.axios.post(
+      this.getPath(),
+      data,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      },
+    );
+    await this.forceFetch();
   }
 }
 
@@ -220,10 +245,41 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     return this.data_object.config.mode[0];
   }
 
-  // TODO: this should have a mutex on it
-  async set(key: string, value: string): Promise<void> {
+  async setMode(mode: string): Promise<void> {
     await this.forceFetch();
-    // TODO modify this.data_object
+    if (mode !== await this.getMode()) {
+      this.data_object.config.mode[0] = mode;
+      await this.push();  
+    }
+  }
+
+  async setZoneSetpoints(
+    zone = 0,
+    clsp: number | null,
+    htsp: number | null,
+  ): Promise<void> {
+    await this.forceFetch();
+    // Set to manual activity
+    this.data_object.config.zones[0].zone[zone.toString()]['holdActivity'][0] = 'manual';
+    this.data_object.config.zones[0].zone[zone.toString()]['hold'][0] = 'on';
+    // TODO: set manual expire time to beginning of next scheduled activity
+    this.data_object.config.zones[0].zone[zone.toString()]['otmr'][0] = '02:30';
+    // Find the index of the manual activity
+    const activites = this.data_object.config.zones[0].zone[zone.toString()]['activities'][0].activity;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let i: any; for (i in activites) {
+      if (activites[i]['$'].id === 'manual') {
+        break; 
+      }
+    }
+    // Set setpoints on manual activity
+    if (clsp) {
+      this.data_object.config.zones[0].zone[zone.toString()]['activities'][0].activity[i]['clsp'][0] = clsp.toFixed(1);
+    }
+    if (htsp) {
+      this.data_object.config.zones[0].zone[zone.toString()]['activities'][0].activity[i]['htsp'][0] = htsp.toFixed(1);
+    }
+    console.dir(this.data_object.config.zones[0].zone[zone.toString()]['activities'][0].activity[i]);
     await this.push();
   }
 }
