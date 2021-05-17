@@ -35,20 +35,66 @@ export class InfinityEvolutionPlatformAccessory {
     );
     this.system_config.fetch().then();
         
-    // create handlers
+    // Create handlers
     this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
-      .onGet(this.handleCurrentHeatingCoolingStateGet.bind(this));
-    
+      .onGet(async () => {
+        const current_state = await this.system_status.getMode();
+        switch(current_state) {
+          case SYSTEM_MODE.OFF:
+            return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
+          case SYSTEM_MODE.COOL:
+            return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
+          case SYSTEM_MODE.HEAT:
+            return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
+          default:
+            throw Error(`Unknown current state '${current_state}'`);
+        }
+      });
+
     this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
-      .onGet(this.handleTargetHeatingCoolingStateGet.bind(this))
-      .onSet(this.handleTargetHeatingCoolingStateSet.bind(this));
+      .onGet(async () => {
+        const target_state = await this.system_config.getMode();
+        switch(target_state) {
+          case SYSTEM_MODE.OFF:
+            return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
+          case SYSTEM_MODE.COOL:
+            return this.platform.Characteristic.TargetHeatingCoolingState.COOL;
+          case SYSTEM_MODE.HEAT:
+            return this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
+          case SYSTEM_MODE.AUTO:
+            return this.platform.Characteristic.TargetHeatingCoolingState.AUTO;
+          default:
+            throw Error(`Unknown target state '${target_state}'`);
+        }
+      })
+      .onSet(async (value) => {
+        if (value === this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).value) {
+          return;
+        }
+        switch(value) {
+          case this.platform.Characteristic.TargetHeatingCoolingState.OFF:
+            return await this.system_config.setMode(SYSTEM_MODE.OFF);
+          case this.platform.Characteristic.TargetHeatingCoolingState.COOL:
+            return await this.system_config.setMode(SYSTEM_MODE.COOL);
+          case this.platform.Characteristic.TargetHeatingCoolingState.HEAT:
+            return await this.system_config.setMode(SYSTEM_MODE.HEAT);
+          case this.platform.Characteristic.TargetHeatingCoolingState.AUTO:
+            return await this.system_config.setMode(SYSTEM_MODE.AUTO);
+          default:
+            throw Error(`Unknown target state ${value}`);
+        }
+      });
     
     this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
-      .onGet(this.handleTemperatureDisplayUnitsGet.bind(this));
+      .onGet(async () => {
+        return await this.system_status.getUnits() === 'F' ?
+          this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT :
+          this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
+      });    
 
     this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
       .onGet(async () => {
-        return await this.handleTempGet(await this.system_status.getZoneTemp());
+        return await this.convertSystemTemp2CharTemp(await this.system_status.getZoneTemp()); 
       });
     
     this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
@@ -56,36 +102,25 @@ export class InfinityEvolutionPlatformAccessory {
         const cmode = await this.system_config.getMode();
         switch (cmode) {
           case SYSTEM_MODE.COOL:
-            return await this.handleTempGet(await this.system_status.getZoneCoolSetpoint());
+            return await this.convertSystemTemp2CharTemp(await this.system_status.getZoneCoolSetpoint());
           case SYSTEM_MODE.HEAT:
-            return await this.handleTempGet(await this.system_status.getZoneHeatSetpoint());
+            return await this.convertSystemTemp2CharTemp(await this.system_status.getZoneHeatSetpoint());
           default:
-            return await this.handleTempGet(
-              (await this.system_status.getZoneCoolSetpoint() + await this.system_status.getZoneHeatSetpoint())
-              / 2,
+            return await this.convertSystemTemp2CharTemp(
+              (await this.system_status.getZoneCoolSetpoint() + await this.system_status.getZoneHeatSetpoint()) / 2,
             );
         }
       })
       .onSet(async (value) => {
-        // Ignore events with no value change
         if (value === this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).value) {
           return;
         }
-
-        // Confirm is number, maybe convert to F
-        if (typeof value !== 'number') {
-          throw new Error(`Invalid target temp value ${value}.`);
-        }
-        if (await this.system_status.getUnits() === 'F') {
-          value = this.cToF(value);
-        }
-
-        // Call Api
         const cmode = await this.system_config.getMode();
         switch (cmode) {
           case SYSTEM_MODE.COOL:
           case SYSTEM_MODE.HEAT:
-            return await this.system_config.setZoneSetpoints(0, value, value);
+            value = await this.convertCharTemp2SystemTemp(value);
+            return await this.system_config.setZoneSetpoints(0, value, value); 
           default:
             return;
         }
@@ -93,124 +128,43 @@ export class InfinityEvolutionPlatformAccessory {
     
     this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
       .onGet(async () => {
-        return await this.handleTempGet(await this.system_status.getZoneCoolSetpoint());
+        return this.convertSystemTemp2CharTemp(await this.system_status.getZoneCoolSetpoint());
       })
       .onSet(async (value) => {
-        // Ignore events with no value change
         if (value === this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value) {
           return;
         }
-
-        // Confirm is number, maybe convert to F
-        if (typeof value !== 'number') {
-          throw new Error(`Invalid target temp value ${value}.`);
-        }
-        if (await this.system_status.getUnits() === 'F') {
-          value = this.cToF(value);
-        }
-
-        // Call Api
-        return await this.system_config.setZoneSetpoints(0, value, null); 
+        return await this.system_config.setZoneSetpoints(0, await this.convertCharTemp2SystemTemp(value), null); 
       });
 
     this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
       .onGet(async () => {
-        return await this.handleTempGet(await this.system_status.getZoneHeatSetpoint());
+        return this.convertSystemTemp2CharTemp(await this.system_status.getZoneHeatSetpoint());
       })
       .onSet(async (value) => {
-        // Ignore events with no value change
         if (value === this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value) {
           return;
         }
-
-        // Confirm is number, maybe convert to F
-        if (typeof value !== 'number') {
-          throw new Error(`Invalid target temp value ${value}.`);
-        }
-        if (await this.system_status.getUnits() === 'F') {
-          value = this.cToF(value);
-        }
-
-        // Call Api
-        return await this.system_config.setZoneSetpoints(0, null, value); 
+        return await this.system_config.setZoneSetpoints(0, null, await this.convertCharTemp2SystemTemp(value)); 
       });
   }
 
-  cToF(temp: number): number {
-    return (9.0 / 5.0 * temp) + 32;
-  }
-
-  fToC(temp: number): number {
-    return 5.0 / 9.0 * (temp - 32);
-  }
-
-  async handleCurrentHeatingCoolingStateGet(): Promise<CharacteristicValue> {
-    const current_state = await this.system_status.getMode();
-    switch(current_state) {
-      case SYSTEM_MODE.OFF:
-        return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
-      case SYSTEM_MODE.COOL:
-        return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
-      case SYSTEM_MODE.HEAT:
-        return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
-      default:
-        throw Error(`Unknown current state '${current_state}'`);
-    }
-  }
-
-  async handleTargetHeatingCoolingStateGet(): Promise<CharacteristicValue> {
-    const target_state = await this.system_config.getMode();
-    switch(target_state) {
-      case SYSTEM_MODE.OFF:
-        return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
-      case SYSTEM_MODE.COOL:
-        return this.platform.Characteristic.TargetHeatingCoolingState.COOL;
-      case SYSTEM_MODE.HEAT:
-        return this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
-      case SYSTEM_MODE.AUTO:
-        return this.platform.Characteristic.TargetHeatingCoolingState.AUTO;
-      default:
-        throw Error(`Unknown target state '${target_state}'`);
-    }
-  }
-
-  async handleTargetHeatingCoolingStateSet(value: CharacteristicValue): Promise<void> {
-    // Ignore events with no value change
-    if (value === this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).value) {
-      return;
-    }
-
-    if (typeof value !== 'number') {
-      throw new Error(`Invalid target temp state ${value}.`);
-    }
-    let target_state: string;
-    switch(value) {
-      case this.platform.Characteristic.TargetHeatingCoolingState.OFF:
-        target_state = SYSTEM_MODE.OFF; break;
-      case this.platform.Characteristic.TargetHeatingCoolingState.COOL:
-        target_state = SYSTEM_MODE.COOL; break;
-      case this.platform.Characteristic.TargetHeatingCoolingState.HEAT:
-        target_state = SYSTEM_MODE.HEAT; break;
-      case this.platform.Characteristic.TargetHeatingCoolingState.AUTO:
-        target_state = SYSTEM_MODE.AUTO; break;
-      default:
-        throw Error(`Unknown target state ${value}`);
-    }
-
-    await this.system_config.setMode(target_state);
-  }
-
-  async handleTempGet(value: number): Promise<CharacteristicValue> {
+  async convertSystemTemp2CharTemp(temp: number): Promise<CharacteristicValue> {
     if (await this.system_status.getUnits() === 'F') {
-      value = this.fToC(value);
+      return 5.0 / 9.0 * (temp - 32);
+    } else {
+      return temp;
     }
-    return value;
   }
 
-  async handleTemperatureDisplayUnitsGet(): Promise<CharacteristicValue> {
-    const units = await this.system_status.getUnits();
-    return units === 'C' ?
-      this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS :
-      this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT;
+  async convertCharTemp2SystemTemp(temp: CharacteristicValue): Promise<number> {
+    if (typeof temp !== 'number') {
+      throw new Error(`Invalid target temp value ${temp}.`);
+    }
+    if (await this.system_config.getUnits() === 'F') {
+      return (9.0 / 5.0 * temp) + 32;
+    } else {
+      return temp;
+    }
   }
 }
