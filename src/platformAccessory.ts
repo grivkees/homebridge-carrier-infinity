@@ -115,12 +115,12 @@ export class InfinityEvolutionPlatformAccessory {
         if (value === this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).value) {
           return;
         }
+        const svalue = await this.convertCharTemp2SystemTemp(value);
         const cmode = await this.system_config.getMode();
         switch (cmode) {
           case SYSTEM_MODE.COOL:
           case SYSTEM_MODE.HEAT:
-            value = await this.convertCharTemp2SystemTemp(value);
-            return await this.system_config.setZoneSetpoints(0, value, value); 
+            return await this.system_config.setZoneSetpoints(0, svalue, svalue); 
           default:
             return;
         }
@@ -134,7 +134,13 @@ export class InfinityEvolutionPlatformAccessory {
         if (value === this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value) {
           return;
         }
-        return await this.system_config.setZoneSetpoints(0, await this.convertCharTemp2SystemTemp(value), null); 
+        return await this.system_config.setZoneSetpoints(
+          0,
+          await this.convertCharTemp2SystemTemp(value),
+          await this.convertCharTemp2SystemTemp(
+            this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value,
+          ),
+        ); 
       });
 
     this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
@@ -145,7 +151,13 @@ export class InfinityEvolutionPlatformAccessory {
         if (value === this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value) {
           return;
         }
-        return await this.system_config.setZoneSetpoints(0, null, await this.convertCharTemp2SystemTemp(value)); 
+        return await this.system_config.setZoneSetpoints(
+          0,
+          await this.convertCharTemp2SystemTemp(
+            this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value,
+          ),
+          await this.convertCharTemp2SystemTemp(value),
+        ); 
       });
   }
 
@@ -157,7 +169,10 @@ export class InfinityEvolutionPlatformAccessory {
     }
   }
 
-  async convertCharTemp2SystemTemp(temp: CharacteristicValue): Promise<number> {
+  async convertCharTemp2SystemTemp(temp: CharacteristicValue | null): Promise<number | null> {
+    if (temp === null) {
+      return temp;
+    }
     if (typeof temp !== 'number') {
       throw new Error(`Invalid target temp value ${temp}.`);
     }
