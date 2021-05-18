@@ -129,7 +129,6 @@ abstract class BaseInfinityEvolutionApiModel {
     this.data_object = await xml2js.parseStringPromise(response.data);
   }
 
-  
   async push(): Promise<void> {
     await this.write_lock.runExclusive(async () => {
       await this.pushUnsafe();
@@ -182,12 +181,19 @@ export class InfinityEvolutionLocations extends BaseInfinityEvolutionApiModel {
 
 abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolutionApiModel {
   protected data_object: any = null;
+  public last_updated = 0;
 
   constructor(
     api: InfinityEvolutionApi,
     public readonly serialNumber: string,
   ) {
     super(api);
+  }
+
+  protected async forceFetch(): Promise<void> {
+    await super.forceFetch();
+    const top_level_key = Object.keys(this.data_object)[0];
+    this.last_updated = Date.parse(this.data_object[top_level_key].timestamp[0]);
   }
 }
 
