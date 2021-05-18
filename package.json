@@ -27,15 +27,15 @@
     "homebridge-plugin"
   ],
   "dependencies": {
-    "async-mutex": "*",
-    "axios": "*",
-    "oauth-signature": "*",
-    "xml2js": "*",
-    "typescript-memoize": "*"
+    "async-mutex": "^0.3.1",
+    "axios": "^0.21.1",
+    "oauth-signature": "^1.5.0",
+    "xml2js": "^0.4.23",
+    "typescript-memoize": "^1.0.1"
   },
   "devDependencies": {
     "@types/node": "^14.14.6",
-    "@types/xml2js": "*",
+    "@types/xml2js": "^0.4.8",
     "@typescript-eslint/eslint-plugin": "^4.6.1",
     "@typescript-eslint/parser": "^4.6.1",
     "eslint": "^7.13.0",
