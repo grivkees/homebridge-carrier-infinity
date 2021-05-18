@@ -307,6 +307,27 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     return Number(activity_obj.htsp[0]);
   }
 
+  async getZoneNextActivityTime(zone = 0): Promise<string> {
+    const now = new Date();
+    const program_obj = (await this.getZone(zone))['program'][0];
+    if (typeof program_obj === 'object' && program_obj !== null) {
+      const day_obj = program_obj['day'][now.getDay()];
+      for (const i in day_obj['period']) {
+        const time = day_obj['period'][i].time[0];
+        const split = time.split(':');
+        if (
+          // The hour is nigh
+          Number(split[0]) > now.getHours() ||
+          // The hour is now, the minute is nigh
+          (Number(split[0]) === now.getHours() && Number(split[1]) > now.getMinutes())
+        ) {
+          return time;
+        }
+      }
+    }
+    throw new Error('Error parsing activities program config.');
+  }
+
   // TODO: this is unsafe if clsp and htsp are called at the same time, one could undo the other.
   async setZoneSetpoints(
     zone = 0,

@@ -183,7 +183,7 @@ export class InfinityEvolutionPlatformAccessory {
   async getHoldTime(): Promise<string> {
     switch (this.platform.config['holdBehavior']) {
       case 'activity':
-        return '';
+        return await this.system_config.getZoneNextActivityTime();
       case 'for_x': {
         const arg = this.platform.config['holdArgument'].split(':');
         let target_ms = (new Date()).getTime();
