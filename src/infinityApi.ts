@@ -106,6 +106,7 @@ export class InfinityEvolutionApi {
 
 abstract class BaseInfinityEvolutionApiModel {
   // TODO make unknown and handle type checking in getters
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   protected data_object: any = null;
   protected write_lock: Mutex;
 
@@ -180,7 +181,6 @@ export class InfinityEvolutionLocations extends BaseInfinityEvolutionApiModel {
 }
 
 abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolutionApiModel {
-  protected data_object: any = null;
   public last_updated = 0;
 
   constructor(
@@ -272,26 +272,29 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     }
   }
 
-  private async getZone(zone = 0): Promise<any> {
+  private async getZone(zone = 0): Promise<Record<string, Array<unknown>>> {
     await this.fetch();
     return this.data_object.config.zones[0].zone[zone.toString()];
   }
 
   async getZoneActivity(zone = 0): Promise<string | null> {
     const zone_obj = await this.getZone(zone);
-    if (zone_obj['hold'][0] === 'on') {
+    if (zone_obj['hold'][0] === 'on' && typeof zone_obj['holdActivity'][0] === 'string') {
       return zone_obj['holdActivity'][0];
     }
     return null;
   }
 
-  private async getZoneActivityConfig(zone = 0, activity: string): Promise<any> {
-    const activites = (await this.getZone(zone))['activities'][0].activity;
-    for (const i in activites) {
-      if (activites[i]['$'].id === activity) {
-        return activites[i];
+  private async getZoneActivityConfig(zone = 0, activity: string): Promise<Record<string, Array<string>>> {
+    const activites_obj = (await this.getZone(zone))['activities'][0];
+    if (typeof activites_obj === 'object' && activites_obj !== null) {
+      for (const i in activites_obj['activity']) {
+        if (activites_obj['activity'][i]['$'].id === activity) {
+          return activites_obj['activity'][i];
+        }
       }
     }
+    throw new Error('Error parsing zone activities config.');
   }
 
   async getZoneActivityCoolSetpoint(zone = 0, activity: string): Promise<number> {
@@ -312,24 +315,18 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
   ): Promise<void> {
     await this.forceFetch();
     // Set to manual activity
-    this.data_object.config.zones[0].zone[zone.toString()]['holdActivity'][0] = 'manual';
-    this.data_object.config.zones[0].zone[zone.toString()]['hold'][0] = 'on';
+    const zone_obj = await this.getZone(zone);
+    zone_obj['holdActivity'][0] = 'manual';
+    zone_obj['hold'][0] = 'on';
     // TODO: set manual expire time to beginning of next scheduled activity
-    this.data_object.config.zones[0].zone[zone.toString()]['otmr'][0] = '02:30';
-    // Find the index of the manual activity
-    const activites = this.data_object.config.zones[0].zone[zone.toString()]['activities'][0].activity;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let i: any; for (i in activites) {
-      if (activites[i]['$'].id === 'manual') {
-        break; 
-      }
-    }
+    zone_obj['otmr'][0] = '02:30';
     // Set setpoints on manual activity
+    const activity_obj = await this.getZoneActivityConfig(zone, 'manual');
     if (clsp) {
-      this.data_object.config.zones[0].zone[zone.toString()]['activities'][0].activity[i]['clsp'][0] = clsp.toFixed(1);
+      activity_obj['clsp'][0] = clsp.toFixed(1);
     }
     if (htsp) {
-      this.data_object.config.zones[0].zone[zone.toString()]['activities'][0].activity[i]['htsp'][0] = htsp.toFixed(1);
+      activity_obj['htsp'][0] = htsp.toFixed(1);
     }
     await this.push();
   }
