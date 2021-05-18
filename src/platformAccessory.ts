@@ -177,6 +177,7 @@ export class InfinityEvolutionPlatformAccessory {
 
   async getZoneActvity(zone = 0): Promise<string> {
     // Prefer config activity name, since that updates more often. Fallback to status activity name, to pick up schedules.
+    // TODO: Always compute activity name via config. Using status activity name when no hold means removing hold takes a while to show up.
     return await this.system_config.getZoneActivity(zone) || this.system_status.getZoneActivity(zone);
   }
 
