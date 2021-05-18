@@ -1,5 +1,4 @@
 {
-  "private": true,
   "displayName": "Homebridge Carrier Infinity",
   "name": "homebridge-carrier-infinity",
   "version": "0.1.0",
