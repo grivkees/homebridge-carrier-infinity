@@ -312,6 +312,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     zone = 0,
     clsp: number | null,
     htsp: number | null,
+    hold_until: string | null,
   ): Promise<void> {
     await this.forceFetch();
     // Set to manual activity
@@ -319,7 +320,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     zone_obj['holdActivity'][0] = 'manual';
     zone_obj['hold'][0] = 'on';
     // TODO: set manual expire time to beginning of next scheduled activity
-    zone_obj['otmr'][0] = '02:30';
+    zone_obj['otmr'][0] = hold_until || '';
     // Set setpoints on manual activity
     const activity_obj = await this.getZoneActivityConfig(zone, 'manual');
     if (clsp) {

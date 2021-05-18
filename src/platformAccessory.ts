@@ -122,7 +122,7 @@ export class InfinityEvolutionPlatformAccessory {
         switch (cmode) {
           case SYSTEM_MODE.COOL:
           case SYSTEM_MODE.HEAT:
-            return await this.system_config.setZoneSetpoints(0, svalue, svalue); 
+            return await this.system_config.setZoneSetpoints(0, svalue, svalue, await this.getHoldTime()); 
           default:
             return;
         }
@@ -147,6 +147,7 @@ export class InfinityEvolutionPlatformAccessory {
           await this.convertCharTemp2SystemTemp(
             this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value,
           ),
+          await this.getHoldTime(),
         ); 
       });
 
@@ -169,6 +170,7 @@ export class InfinityEvolutionPlatformAccessory {
             this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value,
           ),
           await this.convertCharTemp2SystemTemp(value),
+          await this.getHoldTime(),
         ); 
       });
   }
@@ -176,6 +178,27 @@ export class InfinityEvolutionPlatformAccessory {
   async getZoneActvity(zone = 0): Promise<string> {
     // Prefer config activity name, since that updates more often. Fallback to status activity name, to pick up schedules.
     return await this.system_config.getZoneActivity(zone) || this.system_status.getZoneActivity(zone);
+  }
+
+  async getHoldTime(): Promise<string> {
+    switch (this.platform.config['holdBehavior']) {
+      case 'activity':
+        return '';
+      case 'for_x': {
+        const arg = this.platform.config['holdArgument'].split(':');
+        let target_ms = (new Date()).getTime();
+        target_ms += Number(arg[0]) * 60 * 60 * 1000;
+        target_ms += Number(arg[1]) * 60 * 1000;
+        const target_date = new Date(target_ms);
+        return `${target_date.getHours()}:${target_date.getMinutes()}`.padStart(5, '0');
+      }
+      case 'until_x':
+        return this.platform.config['holdArgument'];
+      case 'forever':
+        return '';
+      default:
+        throw new Error('Unknown hold behavior.');
+    }
   }
 
   async convertSystemTemp2CharTemp(temp: number): Promise<CharacteristicValue> {
