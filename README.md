@@ -8,8 +8,8 @@ This is a standalone plugin that talks directly to the Carrier/Bryant api. It do
 
 If you have not done so already, you need to set up a Carrier/Bryant account and link it to your thermostat. You will need these credentials to configure this plugin.
 
-* Carrier: https://www.carrier.com/residential/en/us/access-your-thermostat/register.html
-* Bryant: https://www.bryant.com/en/us/current-owners/remote-login/bryant-thermostat/thermostat-registration/
+* Carrier: https://www.myinfinitytouch.carrier.com/Account/Register
+* Bryant: https://www.myevolutionconnex.bryant.com/Account/Register
 
 # Behavior
 
