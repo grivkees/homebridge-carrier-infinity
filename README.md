@@ -1,15 +1,15 @@
 # homebridge-carrier-infinity
 
-Homebridge plugin for Carrier Infinity and Bryant Evolution thermostats.
+**Homebridge plugin for Carrier Infinity and Bryant Evolution thermostats.**
 
 This is a standalone plugin that talks directly to the Carrier/Bryant api. It does not require Infinitude/Infinitive.
 
 # Create Carrier/Bryant Account 
 
-If you have not done so already, you need to set up a Carrier or Bryant account, and link your thermostat to that account. You will use the username and password of this account for the configuration later.
+If you have not done so already, you need to set up a Carrier/Bryant account and link it to your thermostat. You will need these credentials to configure this plugin.
 
-Carrier: https://www.carrier.com/residential/en/us/access-your-thermostat/register.html
-Bryant: https://www.bryant.com/en/us/current-owners/remote-login/bryant-thermostat/thermostat-registration/
+* Carrier: https://www.carrier.com/residential/en/us/access-your-thermostat/register.html
+* Bryant: https://www.bryant.com/en/us/current-owners/remote-login/bryant-thermostat/thermostat-registration/
 
 # Behavior
 
@@ -30,7 +30,7 @@ You can choose how you want changes made via homekit to interact with the activi
       "username": "USERNAME",
       "password": "PASSWORD,
       "holdBehavior": "activity",
-      "holdArgument": "HH:MM", // optional
+      "holdArgument": "HH:MM",
     }
   ]
 }
@@ -38,7 +38,7 @@ You can choose how you want changes made via homekit to interact with the activi
 
 # Known Issues
 
-* This plugin currently only supports Zone 1.
+* This plugin currently only supports Zone 1. Zones 2+ will not show up.
 
 # Non-Issues
 
