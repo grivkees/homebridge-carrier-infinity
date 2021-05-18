@@ -87,7 +87,7 @@ export class InfinityEvolutionPlatformAccessory {
     
     this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
       .onGet(async () => {
-        return await this.system_status.getUnits() === 'F' ?
+        return await this.system_config.getUnits() === 'F' ?
           this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT :
           this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
       });    
@@ -100,15 +100,17 @@ export class InfinityEvolutionPlatformAccessory {
     this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .onGet(async () => {
         const cmode = await this.system_config.getMode();
+        const activity = await this.getZoneActvity();
         switch (cmode) {
           case SYSTEM_MODE.COOL:
-            return await this.convertSystemTemp2CharTemp(await this.system_status.getZoneCoolSetpoint());
+            return await this.convertSystemTemp2CharTemp(await this.system_config.getZoneActivityCoolSetpoint(0, activity));
           case SYSTEM_MODE.HEAT:
-            return await this.convertSystemTemp2CharTemp(await this.system_status.getZoneHeatSetpoint());
+            return await this.convertSystemTemp2CharTemp(await this.system_config.getZoneActivityHeatSetpoint(0, activity));
           default:
-            return await this.convertSystemTemp2CharTemp(
-              (await this.system_status.getZoneCoolSetpoint() + await this.system_status.getZoneHeatSetpoint()) / 2,
-            );
+            return await this.convertSystemTemp2CharTemp((
+              await this.system_config.getZoneActivityCoolSetpoint(0, activity) +
+                await this.system_config.getZoneActivityHeatSetpoint(0, activity)
+            ) / 2);
         }
       })
       .onSet(async (value) => {
@@ -128,7 +130,12 @@ export class InfinityEvolutionPlatformAccessory {
     
     this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature)
       .onGet(async () => {
-        return this.convertSystemTemp2CharTemp(await this.system_status.getZoneCoolSetpoint());
+        return this.convertSystemTemp2CharTemp(
+          await this.system_config.getZoneActivityCoolSetpoint(
+            0,
+            await this.getZoneActvity(),
+          ),
+        );
       })
       .onSet(async (value) => {
         if (value === this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value) {
@@ -145,7 +152,12 @@ export class InfinityEvolutionPlatformAccessory {
 
     this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
       .onGet(async () => {
-        return this.convertSystemTemp2CharTemp(await this.system_status.getZoneHeatSetpoint());
+        return this.convertSystemTemp2CharTemp(
+          await this.system_config.getZoneActivityHeatSetpoint(
+            0,
+            await this.getZoneActvity(),
+          ),
+        );
       })
       .onSet(async (value) => {
         if (value === this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value) {
@@ -159,6 +171,11 @@ export class InfinityEvolutionPlatformAccessory {
           await this.convertCharTemp2SystemTemp(value),
         ); 
       });
+  }
+
+  async getZoneActvity(zone = 0): Promise<string> {
+    // Prefer config activity name, since that updates more often. Fallback to status activity name, to pick up schedules.
+    return await this.system_config.getZoneActivity(zone) || this.system_status.getZoneActivity(zone);
   }
 
   async convertSystemTemp2CharTemp(temp: number): Promise<CharacteristicValue> {

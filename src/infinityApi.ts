@@ -117,7 +117,7 @@ abstract class BaseInfinityEvolutionApiModel {
 
   abstract getPath(): string;
 
-  @MemoizeExpiring(30 * 1000)
+  @MemoizeExpiring(10 * 1000)
   async fetch(): Promise<void> {
     await this.forceFetch();
   }
@@ -232,6 +232,10 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     return Number((await this.getZone(zone)).rt[0]);
   }
 
+  async getZoneActivity(zone = 0): Promise<string> {
+    return (await this.getZone(zone)).currentActivity[0];
+  }
+
   async getZoneCoolSetpoint(zone = 0): Promise<number> {
     return Number((await this.getZone(zone)).clsp[0]);
   }
@@ -266,6 +270,38 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
       this.data_object.config.mode[0] = mode;
       await this.push();  
     }
+  }
+
+  private async getZone(zone = 0): Promise<any> {
+    await this.fetch();
+    return this.data_object.config.zones[0].zone[zone.toString()];
+  }
+
+  async getZoneActivity(zone = 0): Promise<string | null> {
+    const zone_obj = await this.getZone(zone);
+    if (zone_obj['hold'][0] === 'on') {
+      return zone_obj['holdActivity'][0];
+    }
+    return null;
+  }
+
+  private async getZoneActivityConfig(zone = 0, activity: string): Promise<any> {
+    const activites = (await this.getZone(zone))['activities'][0].activity;
+    for (const i in activites) {
+      if (activites[i]['$'].id === activity) {
+        return activites[i];
+      }
+    }
+  }
+
+  async getZoneActivityCoolSetpoint(zone = 0, activity: string): Promise<number> {
+    const activity_obj = await this.getZoneActivityConfig(zone, activity);
+    return Number(activity_obj.clsp[0]);
+  }
+
+  async getZoneActivityHeatSetpoint(zone = 0, activity: string): Promise<number> {
+    const activity_obj = await this.getZoneActivityConfig(zone, activity);
+    return Number(activity_obj.htsp[0]);
   }
 
   // TODO: this is unsafe if clsp and htsp are called at the same time, one could undo the other.
