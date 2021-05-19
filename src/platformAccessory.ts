@@ -2,20 +2,19 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 
 import { CarrierInfinityHomebridgePlatform } from './platform';
 
-import { InfinityEvolutionSystemStatus, InfinityEvolutionSystemConfig, SYSTEM_MODE } from './infinityApi';
+import { InfinityEvolutionSystemStatus, InfinityEvolutionSystemConfig, InfinityEvolutionSystemProfile, SYSTEM_MODE } from './infinityApi';
 
 export class InfinityEvolutionPlatformAccessory {
   private service: Service;
   private system_status: InfinityEvolutionSystemStatus;
   private system_config: InfinityEvolutionSystemConfig;
+  private system_profile: InfinityEvolutionSystemProfile;
 
   constructor(
     private readonly platform: CarrierInfinityHomebridgePlatform,
     private readonly accessory: PlatformAccessory,
   ) {
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.Manufacturer, 'Default-Manufacturer') // TODO
-      .setCharacteristic(this.platform.Characteristic.Model, 'Default-Model') // TODO
       .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.serialNumber);
 
     this.service = this.accessory.getService(
@@ -34,6 +33,16 @@ export class InfinityEvolutionPlatformAccessory {
       this.accessory.context.serialNumber,
     );
     this.system_config.fetch().then();
+    this.system_profile = new InfinityEvolutionSystemProfile(
+      this.platform.InfinityEvolutionApi,
+      this.accessory.context.serialNumber,
+    );
+    this.system_profile.fetch().then(async () => {
+      this.accessory.getService(this.platform.Service.AccessoryInformation)!
+        .setCharacteristic(this.platform.Characteristic.Manufacturer, await this.system_profile.getBrand())
+        .setCharacteristic(this.platform.Characteristic.Model, await this.system_profile.getModel())
+        .setCharacteristic(this.platform.Characteristic.FirmwareRevision, await this.system_profile.getFirmware());
+    });
         
     // Create handlers
     this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)

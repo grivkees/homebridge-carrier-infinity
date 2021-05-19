@@ -197,6 +197,36 @@ abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolution
   }
 }
 
+export class InfinityEvolutionSystemProfile extends BaseInfinityEvolutionSystemApiModel {
+  constructor(api: InfinityEvolutionApi, serialNumber: string) {
+    super(api, serialNumber);
+  }
+
+  getPath(): string {
+    return `/systems/${this.serialNumber}/profile`;
+  }
+
+  async getName(): Promise<string> {
+    await this.fetch();
+    return this.data_object.system_profile.name[0];
+  }
+
+  async getBrand(): Promise<string> {
+    await this.fetch();
+    return this.data_object.system_profile.brand[0];
+  }
+
+  async getModel(): Promise<string> {
+    await this.fetch();
+    return this.data_object.system_profile.model[0];
+  }
+
+  async getFirmware(): Promise<string> {
+    await this.fetch();
+    return this.data_object.system_profile.firmware[0];
+  }
+}
+
 export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemApiModel {
   constructor(api: InfinityEvolutionApi, serialNumber: string) {
     super(api, serialNumber);
