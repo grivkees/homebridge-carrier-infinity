@@ -232,6 +232,10 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     return Number((await this.getZone(zone)).rt[0]);
   }
 
+  async getZoneHumidity(zone = 0): Promise<number> {
+    return Number((await this.getZone(zone)).rh[0]);
+  }
+
   async getZoneActivity(zone = 0): Promise<string> {
     return (await this.getZone(zone)).currentActivity[0];
   }

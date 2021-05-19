@@ -173,6 +173,11 @@ export class InfinityEvolutionPlatformAccessory {
           await this.getHoldTime(),
         ); 
       });
+
+    this.service.getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
+      .onGet(async () => {
+        return await this.system_status.getZoneHumidity();
+      });
   }
 
   async getZoneActvity(zone = 0): Promise<string> {
