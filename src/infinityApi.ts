@@ -324,6 +324,9 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
           return time;
         }
       }
+      // If we got to the end without finding the next activity, it means the next activity is the first from tomorrow
+      const tomorrow_obj = program_obj['day'][(now.getDay() + 1) % 7];
+      return tomorrow_obj['period'][0].time[0];
     }
     throw new Error('Error parsing activities program config.');
   }
