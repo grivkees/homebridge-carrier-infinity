@@ -225,6 +225,18 @@ export class InfinityEvolutionSystemProfile extends BaseInfinityEvolutionSystemA
     await this.fetch();
     return this.data_object.system_profile.firmware[0];
   }
+
+  async getZones(): Promise<Array<string>> {
+    await this.fetch();
+    const zones_obj = this.data_object.system_profile.zones[0].zone;
+    const zones: Array<string> = [];
+    for (const i in zones_obj) {
+      if (zones_obj[i]['present'][0] === 'on') {
+        zones.push(zones_obj[i]['$'].id);
+      }
+    }
+    return zones;
+  }
 }
 
 export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemApiModel {
@@ -253,28 +265,28 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     }
   }
 
-  private async getZone(zone: number): Promise<Record<string, string>> {
+  private async getZone(zone: string): Promise<Record<string, string>> {
     await this.fetch();
-    return this.data_object.status.zones[0].zone[zone.toString()];
+    return this.data_object.status.zones[0].zone[zone];
   }
 
-  async getZoneTemp(zone = 0): Promise<number> {
+  async getZoneTemp(zone: string): Promise<number> {
     return Number((await this.getZone(zone)).rt[0]);
   }
 
-  async getZoneHumidity(zone = 0): Promise<number> {
+  async getZoneHumidity(zone: string): Promise<number> {
     return Number((await this.getZone(zone)).rh[0]);
   }
 
-  async getZoneActivity(zone = 0): Promise<string> {
+  async getZoneActivity(zone: string): Promise<string> {
     return (await this.getZone(zone)).currentActivity[0];
   }
 
-  async getZoneCoolSetpoint(zone = 0): Promise<number> {
+  async getZoneCoolSetpoint(zone: string): Promise<number> {
     return Number((await this.getZone(zone)).clsp[0]);
   }
 
-  async getZoneHeatSetpoint(zone = 0): Promise<number> {
+  async getZoneHeatSetpoint(zone: string): Promise<number> {
     return Number((await this.getZone(zone)).htsp[0]);
   }
 }
@@ -306,12 +318,20 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     }
   }
 
-  private async getZone(zone = 0): Promise<Record<string, Array<unknown>>> {
+  private async getZone(zone: string): Promise<Record<string, Array<unknown>>> {
     await this.fetch();
     return this.data_object.config.zones[0].zone[zone.toString()];
   }
 
-  async getZoneActivity(zone = 0): Promise<string | null> {
+  async getZoneName(zone: string): Promise<string> {
+    const zone_obj = await this.getZone(zone);
+    if (typeof zone_obj['name'][0] === 'string') {
+      return zone_obj['name'][0];
+    }
+    return `Zone ${zone}`;
+  }
+
+  async getZoneActivity(zone: string): Promise<string | null> {
     const zone_obj = await this.getZone(zone);
     if (zone_obj['hold'][0] === 'on' && typeof zone_obj['holdActivity'][0] === 'string') {
       return zone_obj['holdActivity'][0];
@@ -319,7 +339,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     return null;
   }
 
-  private async getZoneActivityConfig(zone = 0, activity: string): Promise<Record<string, Array<string>>> {
+  private async getZoneActivityConfig(zone: string, activity: string): Promise<Record<string, Array<string>>> {
     const activites_obj = (await this.getZone(zone))['activities'][0];
     if (typeof activites_obj === 'object' && activites_obj !== null) {
       for (const i in activites_obj['activity']) {
@@ -331,17 +351,17 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     throw new Error('Error parsing zone activities config.');
   }
 
-  async getZoneActivityCoolSetpoint(zone = 0, activity: string): Promise<number> {
+  async getZoneActivityCoolSetpoint(zone: string, activity: string): Promise<number> {
     const activity_obj = await this.getZoneActivityConfig(zone, activity);
     return Number(activity_obj.clsp[0]);
   }
 
-  async getZoneActivityHeatSetpoint(zone = 0, activity: string): Promise<number> {
+  async getZoneActivityHeatSetpoint(zone: string, activity: string): Promise<number> {
     const activity_obj = await this.getZoneActivityConfig(zone, activity);
     return Number(activity_obj.htsp[0]);
   }
 
-  async getZoneNextActivityTime(zone = 0): Promise<string> {
+  async getZoneNextActivityTime(zone: string): Promise<string> {
     const now = new Date();
     const program_obj = (await this.getZone(zone))['program'][0];
     if (typeof program_obj === 'object' && program_obj !== null) {
@@ -367,7 +387,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
 
   // TODO: this is unsafe if clsp and htsp are called at the same time, one could undo the other.
   async setZoneSetpoints(
-    zone = 0,
+    zone: string,
     clsp: number | null,
     htsp: number | null,
     hold_until: string | null,

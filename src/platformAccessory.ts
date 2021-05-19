@@ -14,13 +14,13 @@ export class InfinityEvolutionPlatformAccessory {
     private readonly platform: CarrierInfinityHomebridgePlatform,
     private readonly accessory: PlatformAccessory,
   ) {
+    // Create services
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.serialNumber);
 
     this.service = this.accessory.getService(
       this.platform.Service.Thermostat) || this.accessory.addService(this.platform.Service.Thermostat,
     );
-    this.service.setCharacteristic(this.platform.Characteristic.Name, accessory.context.displayName);
 
     // Create accessory api bridge
     this.system_status = new InfinityEvolutionSystemStatus(
@@ -32,7 +32,9 @@ export class InfinityEvolutionPlatformAccessory {
       this.platform.InfinityEvolutionApi,
       this.accessory.context.serialNumber,
     );
-    this.system_config.fetch().then();
+    this.system_config.fetch().then(async () => {
+      this.service.setCharacteristic(this.platform.Characteristic.Name, await this.system_config.getZoneName(this.accessory.context.zone));
+    });
     this.system_profile = new InfinityEvolutionSystemProfile(
       this.platform.InfinityEvolutionApi,
       this.accessory.context.serialNumber,
@@ -103,22 +105,26 @@ export class InfinityEvolutionPlatformAccessory {
 
     this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
       .onGet(async () => {
-        return await this.convertSystemTemp2CharTemp(await this.system_status.getZoneTemp()); 
+        return await this.convertSystemTemp2CharTemp(await this.system_status.getZoneTemp(this.accessory.context.zone)); 
       });
     
     this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .onGet(async () => {
         const cmode = await this.system_config.getMode();
-        const activity = await this.getZoneActvity();
+        const activity = await this.getZoneActvity(this.accessory.context.zone);
         switch (cmode) {
           case SYSTEM_MODE.COOL:
-            return await this.convertSystemTemp2CharTemp(await this.system_config.getZoneActivityCoolSetpoint(0, activity));
+            return await this.convertSystemTemp2CharTemp(await this.system_config.getZoneActivityCoolSetpoint(
+              this.accessory.context.zone, activity,
+            ));
           case SYSTEM_MODE.HEAT:
-            return await this.convertSystemTemp2CharTemp(await this.system_config.getZoneActivityHeatSetpoint(0, activity));
+            return await this.convertSystemTemp2CharTemp(await this.system_config.getZoneActivityHeatSetpoint(
+              this.accessory.context.zone, activity,
+            ));
           default:
             return await this.convertSystemTemp2CharTemp((
-              await this.system_config.getZoneActivityCoolSetpoint(0, activity) +
-                await this.system_config.getZoneActivityHeatSetpoint(0, activity)
+              await this.system_config.getZoneActivityCoolSetpoint(this.accessory.context.zone, activity) +
+                await this.system_config.getZoneActivityHeatSetpoint(this.accessory.context.zone, activity)
             ) / 2);
         }
       })
@@ -131,7 +137,7 @@ export class InfinityEvolutionPlatformAccessory {
         switch (cmode) {
           case SYSTEM_MODE.COOL:
           case SYSTEM_MODE.HEAT:
-            return await this.system_config.setZoneSetpoints(0, svalue, svalue, await this.getHoldTime()); 
+            return await this.system_config.setZoneSetpoints(this.accessory.context.zone, svalue, svalue, await this.getHoldTime()); 
           default:
             return;
         }
@@ -141,8 +147,8 @@ export class InfinityEvolutionPlatformAccessory {
       .onGet(async () => {
         return this.convertSystemTemp2CharTemp(
           await this.system_config.getZoneActivityCoolSetpoint(
-            0,
-            await this.getZoneActvity(),
+            this.accessory.context.zone,
+            await this.getZoneActvity(this.accessory.context.zone),
           ),
         );
       })
@@ -151,7 +157,7 @@ export class InfinityEvolutionPlatformAccessory {
           return;
         }
         return await this.system_config.setZoneSetpoints(
-          0,
+          this.accessory.context.zone,
           await this.convertCharTemp2SystemTemp(value),
           await this.convertCharTemp2SystemTemp(
             this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value,
@@ -164,8 +170,8 @@ export class InfinityEvolutionPlatformAccessory {
       .onGet(async () => {
         return this.convertSystemTemp2CharTemp(
           await this.system_config.getZoneActivityHeatSetpoint(
-            0,
-            await this.getZoneActvity(),
+            this.accessory.context.zone,
+            await this.getZoneActvity(this.accessory.context.zone),
           ),
         );
       })
@@ -174,7 +180,7 @@ export class InfinityEvolutionPlatformAccessory {
           return;
         }
         return await this.system_config.setZoneSetpoints(
-          0,
+          this.accessory.context.zone,
           await this.convertCharTemp2SystemTemp(
             this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value,
           ),
@@ -185,11 +191,11 @@ export class InfinityEvolutionPlatformAccessory {
 
     this.service.getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
       .onGet(async () => {
-        return await this.system_status.getZoneHumidity();
+        return await this.system_status.getZoneHumidity(this.accessory.context.zone);
       });
   }
 
-  async getZoneActvity(zone = 0): Promise<string> {
+  async getZoneActvity(zone: string): Promise<string> {
     // Prefer config activity name, since that updates more often. Fallback to status activity name, to pick up schedules.
     // TODO: Always compute activity name via config. Using status activity name when no hold means removing hold takes a while to show up.
     return await this.system_config.getZoneActivity(zone) || this.system_status.getZoneActivity(zone);
@@ -198,7 +204,7 @@ export class InfinityEvolutionPlatformAccessory {
   async getHoldTime(): Promise<string> {
     switch (this.platform.config['holdBehavior']) {
       case 'activity':
-        return await this.system_config.getZoneNextActivityTime();
+        return await this.system_config.getZoneNextActivityTime(this.accessory.context.zone);
       case 'for_x': {
         const arg = this.platform.config['holdArgument'].split(':');
         let target_ms = (new Date()).getTime();

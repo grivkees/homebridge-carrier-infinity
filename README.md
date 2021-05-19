@@ -39,7 +39,6 @@ You can choose how you want changes made via homekit to interact with the activi
 
 # Known Issues
 
-* This plugin currently only supports Zone 1. Zones 2+ will not show up.
 * Removing a hold via the thermostat or Carrier/Bryant app may take several minutes to show up in homekit.
 
 # Non-Issues

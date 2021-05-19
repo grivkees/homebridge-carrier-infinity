@@ -2,7 +2,7 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { InfinityEvolutionPlatformAccessory } from './platformAccessory';
-import { InfinityEvolutionApi, InfinityEvolutionLocations } from './infinityApi';
+import { InfinityEvolutionApi, InfinityEvolutionLocations, InfinityEvolutionSystemProfile } from './infinityApi';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -46,28 +46,36 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     this.accessories.push(accessory);
   }
 
+  registerAccessory(serialNumber: string, zone: string): void {
+    const uuid = this.api.hap.uuid.generate(String(serialNumber));
+    const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
+    if (existingAccessory) {
+      new InfinityEvolutionPlatformAccessory(this, existingAccessory);
+      this.api.updatePlatformAccessories([existingAccessory]);
+    } else {
+      const name = `${serialNumber}:${zone}`;
+      this.log.info('Adding new accessory:', name);
+      const accessory = new this.api.platformAccessory(name, uuid);
+      accessory.context.serialNumber = serialNumber;
+      accessory.context.zone = zone;
+      new InfinityEvolutionPlatformAccessory(this, accessory);
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    }
+  }
+
   discoverDevices(): void {
     new InfinityEvolutionLocations(this.InfinityEvolutionApi).getSystems()
       .then(systems => {
         for (const name in systems) {
           const serialNumber = systems[name];
-          const uuid = this.api.hap.uuid.generate(String(serialNumber));
-          const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
-          if (existingAccessory) {
-            new InfinityEvolutionPlatformAccessory(this, existingAccessory);
-            // Pick up any name changes
-            existingAccessory.context.displayName = `${name} Thermostat`;
-            // create accessory
-            this.api.updatePlatformAccessories([existingAccessory]);
-          } else {
-            this.log.info('Adding new accessory:', name);
-            const accessory = new this.api.platformAccessory(name, uuid);
-            accessory.context.displayName = `${name} Thermostat`;
-            accessory.context.serialNumber = serialNumber;
-            // create accessory and register
-            new InfinityEvolutionPlatformAccessory(this, accessory);
-            this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-          }
+          new InfinityEvolutionSystemProfile(
+            this.InfinityEvolutionApi,
+            serialNumber,
+          ).getZones().then(zones => {
+            for (const zone in zones) {
+              this.registerAccessory(serialNumber, zone);
+            }
+          });
         }
       })
       .catch(error => {
