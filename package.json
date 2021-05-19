@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Carrier Infinity",
   "name": "homebridge-carrier-infinity",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Standalone homebridge plugin for Carrier Infinity / Bryant Evolution thermostats.",
   "license": "MIT",
   "repository": {
