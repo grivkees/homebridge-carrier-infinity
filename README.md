@@ -1,24 +1,16 @@
 # homebridge-carrier-infinity
 
-**Homebridge plugin for Carrier Infinity and Bryant Evolution thermostats.**
+**Homebridge plugin for Carrier Infinity / Bryant Evolution / ICP Brands Ion thermostats.**
 
-This is a standalone plugin that talks directly to the Carrier/Bryant api. It does not require Infinitude/Infinitive.
+This is a standalone plugin that talks directly to the Infinity/Evolution/Ion api. It does not require Infinitude/Infinitive.
 
-# Create Carrier/Bryant Account 
+# Register Your System
 
-If you have not done so already, you need to set up a Carrier/Bryant account and link it to your thermostat. You will need these credentials to configure this plugin.
+If you have not done so already, you need to set up a Infinity/Evolution/Ion account linked to your thermostat. You will need these credentials to configure this plugin.
 
-* Carrier: https://www.myinfinitytouch.carrier.com/Account/Register
-* Bryant: https://www.myevolutionconnex.bryant.com/Account/Register
-
-# Behavior
-
-You can choose how you want changes made via homekit to interact with the activity schedules of your thermostat using the `holdBehavior` setting.
-
-* `activity`: Changes made via homekit will persist until the beginning of the next scheduled activity. Then scheduled activities will resume.
-* `until_x`: Changes made via homekit will persist until the time `HH:MM`. Then scheduled activities will resume. (Set time via `holdArgument` setting.)
-* `for_x`: Changes made via homekit will persist for `HH:MM` from now. Then scheduled activities will resume. (Set time via `holdArgument` setting.)
-* `forever`: Changes made via homekit will persist indefinitely. Scheduled activites will not resume until you remove the manual hold via the thermostat.
+* Carrier Infinity: https://www.myinfinitytouch.carrier.com/Account/Register
+* Bryant Evolution: https://www.myevolutionconnex.bryant.com/Account/Register
+* ICP Brands Ion (Airquest/Arcoaire/Comfortmaker/Day&Night/Heil/Keeprite/Tempstar): https://www.ioncomfort.com/Account/Register
 
 # Configuration
 
@@ -35,6 +27,15 @@ You can choose how you want changes made via homekit to interact with the activi
   ]
 }
 ```
+
+## Hold Behavior
+
+You can choose how you want changes made via homekit to interact with the activity schedules of your thermostat using the `holdBehavior` setting.
+
+* `activity`: Changes made via homekit will persist until the beginning of the next scheduled activity. Then scheduled activities will resume.
+* `until_x`: Changes made via homekit will persist until the time `HH:MM`. Then scheduled activities will resume. (Set time via `holdArgument` setting.)
+* `for_x`: Changes made via homekit will persist for `HH:MM` from now. Then scheduled activities will resume. (Set time via `holdArgument` setting.)
+* `forever`: Changes made via homekit will persist indefinitely. Scheduled activites will not resume until you remove the manual hold via the thermostat.
 
 # Known Issues
 
