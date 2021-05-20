@@ -43,7 +43,7 @@ You can choose how you want changes made via homekit to interact with the activi
 
 # Non-Issues
 
-* It may take 1-2 minutes from the time you make a change via homekit until your thermostat sees the change. This is a result of how the termostats poll for updates.
+* It may take 1-2 minutes from the time you make a change via homekit until your thermostat sees the change. This is a result of how the thermostats poll for updates.
 
 # Disclaimer
 
