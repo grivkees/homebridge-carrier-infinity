@@ -223,7 +223,7 @@ export class InfinityEvolutionPlatformAccessory {
   }
 
   async convertSystemTemp2CharTemp(temp: number): Promise<CharacteristicValue> {
-    if (await this.system_status.getUnits() === 'F') {
+    if (await this.system_config.getUnits() === 'F') {
       return 5.0 / 9.0 * (temp - 32);
     } else {
       return temp;

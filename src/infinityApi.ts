@@ -385,6 +385,16 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     throw new Error('Error parsing activities program config.');
   }
 
+  private async roundSetpoint(temp: number): Promise<string> {
+    if (await this.getUnits() === 'F') {
+      // Increments of 1
+      return temp.toFixed(0);
+    } else {
+      // Increments of .5
+      return (Math.round(temp * 2) / 2).toFixed(1);
+    }
+  }
+
   // TODO: this is unsafe if clsp and htsp are called at the same time, one could undo the other.
   async setZoneSetpoints(
     zone: string,
@@ -401,10 +411,10 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     // Set setpoints on manual activity
     const activity_obj = await this.getZoneActivityConfig(zone, 'manual');
     if (clsp) {
-      activity_obj['clsp'][0] = clsp.toFixed(1);
+      activity_obj['clsp'][0] = await this.roundSetpoint(clsp);
     }
     if (htsp) {
-      activity_obj['htsp'][0] = htsp.toFixed(1);
+      activity_obj['htsp'][0] = await this.roundSetpoint(htsp);
     }
     await this.push();
   }
