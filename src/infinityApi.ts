@@ -13,6 +13,36 @@ export const SYSTEM_MODE = {
   AUTO: 'auto',
 };
 
+interface BaseElement {
+  '$': {id: string};
+}
+
+interface ZoneActivity extends BaseElement {
+  clsp: string[];
+  htsp: string[];
+}
+
+interface ZoneProgram {
+  day: {
+    period: {
+      time: string;
+    }[];
+  }[];
+}
+
+interface Zone {
+  name: string[];
+  rt: string[];
+  rh: string[];
+  clsp: string[];
+  htsp: string[];
+  currentActivity?: string[];
+  hold: string[];
+  holdActivity?: string[];
+  activities?: ZoneActivity[];
+  program?: ZoneProgram[];
+}
+
 class OAuthHeaders {
   static genHeader(httpMethod: string, url: string, username: string, token: string, data: string | null): string {
     // Needed for header and sig
@@ -228,14 +258,11 @@ export class InfinityEvolutionSystemProfile extends BaseInfinityEvolutionSystemA
 
   async getZones(): Promise<Array<string>> {
     await this.fetch();
-    const zones_obj = this.data_object.system_profile.zones[0].zone;
-    const zones: Array<string> = [];
-    for (const i in zones_obj) {
-      if (zones_obj[i]['present'][0] === 'on') {
-        zones.push(zones_obj[i]['$'].id);
-      }
-    }
-    return zones;
+    return this.data_object.system_profile.zones[0].zone.filter(
+      (zone: { present: string[] }) => zone['present'][0] === 'on',
+    ).map(
+      (zone: BaseElement) => zone['$'].id,
+    );
   }
 }
 
@@ -265,7 +292,7 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     }
   }
 
-  private async getZone(zone: string): Promise<Record<string, string>> {
+  private async getZone(zone: string): Promise<Zone> {
     await this.fetch();
     return this.data_object.status.zones[0].zone[zone];
   }
@@ -279,7 +306,7 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
   }
 
   async getZoneActivity(zone: string): Promise<string> {
-    return (await this.getZone(zone)).currentActivity[0];
+    return (await this.getZone(zone)).currentActivity![0];
   }
 
   async getZoneCoolSetpoint(zone: string): Promise<number> {
@@ -318,37 +345,29 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     }
   }
 
-  private async getZone(zone: string): Promise<Record<string, Array<unknown>>> {
+  private async getZone(zone: string): Promise<Zone> {
     await this.fetch();
     return this.data_object.config.zones[0].zone[zone.toString()];
   }
 
   async getZoneName(zone: string): Promise<string> {
     const zone_obj = await this.getZone(zone);
-    if (typeof zone_obj['name'][0] === 'string') {
-      return zone_obj['name'][0];
-    }
-    return `Zone ${zone}`;
+    return zone_obj['name'][0];
   }
 
   async getZoneActivity(zone: string): Promise<string | null> {
     const zone_obj = await this.getZone(zone);
-    if (zone_obj['hold'][0] === 'on' && typeof zone_obj['holdActivity'][0] === 'string') {
-      return zone_obj['holdActivity'][0];
+    if (zone_obj['hold'][0] === 'on') {
+      return zone_obj.holdActivity![0];
     }
     return null;
   }
 
-  private async getZoneActivityConfig(zone: string, activity: string): Promise<Record<string, Array<string>>> {
-    const activites_obj = (await this.getZone(zone))['activities'][0];
-    if (typeof activites_obj === 'object' && activites_obj !== null) {
-      for (const i in activites_obj['activity']) {
-        if (activites_obj['activity'][i]['$'].id === activity) {
-          return activites_obj['activity'][i];
-        }
-      }
-    }
-    throw new Error('Error parsing zone activities config.');
+  private async getZoneActivityConfig(zone: string, activity_name: string): Promise<ZoneActivity> {
+    const activites_obj = (await this.getZone(zone)).activities![0];
+    return activites_obj['activity'].find(
+      (activity: ZoneActivity) => activity['$'].id === activity_name,
+    );
   }
 
   async getZoneActivityCoolSetpoint(zone: string, activity: string): Promise<number> {
@@ -363,26 +382,23 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
 
   async getZoneNextActivityTime(zone: string): Promise<string> {
     const now = new Date();
-    const program_obj = (await this.getZone(zone))['program'][0];
-    if (typeof program_obj === 'object' && program_obj !== null) {
-      const day_obj = program_obj['day'][now.getDay()];
-      for (const i in day_obj['period']) {
-        const time = day_obj['period'][i].time[0];
-        const split = time.split(':');
-        if (
-          // The hour is nigh
-          Number(split[0]) > now.getHours() ||
-          // The hour is now, the minute is nigh
-          (Number(split[0]) === now.getHours() && Number(split[1]) > now.getMinutes())
-        ) {
-          return time;
-        }
+    const program_obj = (await this.getZone(zone)).program![0];
+    const day_obj = program_obj['day'][now.getDay()];
+    for (const i in day_obj['period']) {
+      const time = day_obj['period'][i].time[0];
+      const split = time.split(':');
+      if (
+        // The hour is nigh
+        Number(split[0]) > now.getHours() ||
+        // The hour is now, the minute is nigh
+        (Number(split[0]) === now.getHours() && Number(split[1]) > now.getMinutes())
+      ) {
+        return time;
       }
-      // If we got to the end without finding the next activity, it means the next activity is the first from tomorrow
-      const tomorrow_obj = program_obj['day'][(now.getDay() + 1) % 7];
-      return tomorrow_obj['period'][0].time[0];
     }
-    throw new Error('Error parsing activities program config.');
+    // If we got to the end without finding the next activity, it means the next activity is the first from tomorrow
+    const tomorrow_obj = program_obj['day'][(now.getDay() + 1) % 7];
+    return tomorrow_obj['period'][0].time[0];
   }
 
   private async roundSetpoint(temp: number): Promise<string> {
@@ -405,7 +421,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     await this.forceFetch();
     // Set to manual activity
     const zone_obj = await this.getZone(zone);
-    zone_obj['holdActivity'][0] = 'manual';
+    zone_obj['holdActivity']![0] = 'manual';
     zone_obj['hold'][0] = 'on';
     zone_obj['otmr'][0] = hold_until || '';
     // Set setpoints on manual activity
