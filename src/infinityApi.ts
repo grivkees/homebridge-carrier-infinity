@@ -285,7 +285,7 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     const raw_mode = this.data_object.status.mode[0];
     switch(raw_mode) {
       case 'gasheat':
-      case 'electrc':
+      case 'electric':
         return SYSTEM_MODE.HEAT;
       default:
         return raw_mode;
