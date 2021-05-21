@@ -2,7 +2,7 @@
   "displayName": "Homebridge Carrier Infinity",
   "name": "homebridge-carrier-infinity",
   "version": "1.1.0",
-  "description": "Standalone homebridge plugin for Carrier Infinity / Bryant Evolution thermostats.",
+  "description": "Standalone homebridge plugin for Carrier Infinity / Bryant Evolution / ICP Brands Ion thermostats.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -23,7 +23,12 @@
     "prepublishOnly": "npm run lint && npm run build"
   },
   "keywords": [
-    "homebridge-plugin"
+    "homebridge-plugin",
+    "homebridge",
+    "homekit",
+    "thermostat",
+    "carrier-infinity",
+    "bryant-evolution"
   ],
   "dependencies": {
     "async-mutex": "^0.3.1",
