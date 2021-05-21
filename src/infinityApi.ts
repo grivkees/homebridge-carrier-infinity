@@ -332,6 +332,12 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     return this.data_object.config.cfgem[0];
   }
 
+  async getTempBounds(): Promise<[number, number]> {
+    await this.fetch();
+    const utility_events = this.data_object.config.utilityEvent[0];
+    return [Number(utility_events.minLimit[0]), Number(utility_events.maxLimit[0])];
+  }
+
   async getMode(): Promise<string> {
     await this.fetch();
     return this.data_object.config.mode[0];

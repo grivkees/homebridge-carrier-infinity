@@ -34,6 +34,14 @@ export class InfinityEvolutionPlatformAccessory {
     );
     this.system_config.fetch().then(async () => {
       this.service.setCharacteristic(this.platform.Characteristic.Name, await this.system_config.getZoneName(this.accessory.context.zone));
+      const temp_bounds = await this.system_config.getTempBounds();
+      const bound_props = {
+        minValue: Number(await this.convertSystemTemp2CharTemp(temp_bounds[0])),
+        maxValue: Number(await this.convertSystemTemp2CharTemp(temp_bounds[1])),
+      };
+      this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps(bound_props);
+      this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).setProps(bound_props);
+      this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).setProps(bound_props);
     });
     this.system_profile = new InfinityEvolutionSystemProfile(
       this.platform.InfinityEvolutionApi,
