@@ -320,6 +320,11 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     return Number(this.data_object.status.oat[0]);
   }
 
+  async getFilterUsed(): Promise<number> {
+    await this.fetch();
+    return Number(this.data_object.status.filtrlvl[0]);
+  }
+
   async getMode(): Promise<string> {
     await this.fetch();
     const raw_mode = this.data_object.status.mode[0];

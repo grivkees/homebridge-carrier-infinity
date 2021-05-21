@@ -10,6 +10,7 @@ import {
   InfinityEvolutionSystemProfile,
   SYSTEM_MODE,
 } from './infinityApi';
+import { InfinityFilterServiceDecorator } from './serviceDecorators';
 
 export class InfinityEvolutionPlatformAccessory {
   private service: Service;
@@ -239,6 +240,9 @@ export class InfinityEvolutionPlatformAccessory {
     } else if (this.fan_service) {
       this.accessory.removeService(this.fan_service);
     }
+
+    // Filter Control
+    new InfinityFilterServiceDecorator(this.platform, this.system_status).add_handlers(this.service);
   }
 
   setupFanService(): void {
