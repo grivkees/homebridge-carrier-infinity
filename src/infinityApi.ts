@@ -11,6 +11,7 @@ export const SYSTEM_MODE = {
   COOL: 'cool',
   HEAT: 'heat',
   AUTO: 'auto',
+  FAN_ONLY: 'fanonly',
 };
 
 export const ACTIVITY = {
@@ -22,6 +23,13 @@ export const ACTIVITY = {
   VACATION: 'vacation',
 };
 
+export const FAN_MODE = {
+  OFF: 'off',
+  LOW: 'low',
+  MED: 'med',
+  HIGH: 'high',
+};
+
 interface BaseElement {
   '$': {id: string};
 }
@@ -29,6 +37,7 @@ interface BaseElement {
 interface ZoneActivity extends BaseElement {
   clsp: string[];
   htsp: string[];
+  fan: string[];
 }
 
 interface ZoneProgram {
@@ -43,6 +52,7 @@ interface ZoneProgram {
 
 interface Zone {
   name: string[];
+  fan: string[];
   rt: string[];
   rh: string[];
   clsp: string[];
@@ -301,8 +311,6 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
         return SYSTEM_MODE.HEAT;
       case 'dehumidify':
         return SYSTEM_MODE.COOL;
-      case 'fanonly':  // fan only means no heat or cool
-        return SYSTEM_MODE.OFF;
       default:
         return raw_mode;
     }
@@ -311,6 +319,10 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
   private async getZone(zone: string): Promise<Zone> {
     await this.fetch();
     return this.data_object.status.zones[0].zone[zone];
+  }
+
+  async getZoneFan(zone: string): Promise<string> {
+    return (await this.getZone(zone)).fan[0];
   }
 
   async getZoneTemp(zone: string): Promise<number> {
@@ -356,13 +368,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
 
   async getMode(): Promise<string> {
     await this.fetch();
-    const raw_mode = this.data_object.config.mode[0];
-    switch(raw_mode) {
-      case 'fanonly':  // fan only means no heat or cool
-        return SYSTEM_MODE.OFF;
-      default:
-        return raw_mode;
-    }
+    return this.data_object.config.mode[0];
   }
 
   async setMode(mode: string): Promise<void> {
@@ -417,6 +423,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
         '$': {id: ACTIVITY.VACATION},
         clsp: this.data_object.config.vacmaxt,
         htsp: this.data_object.config.vacmint,
+        fan: this.data_object.config.vacfan,
       };
     }
 
@@ -424,6 +431,11 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     return activites_obj['activity'].find(
       (activity: ZoneActivity) => activity['$'].id === activity_name,
     );
+  }
+
+  async getZoneActivityFan(zone: string, activity: string): Promise<string> {
+    const activity_obj = await this.getZoneActivityConfig(zone, activity);
+    return activity_obj.fan[0];
   }
 
   async getZoneActivityCoolSetpoint(zone: string, activity: string): Promise<number> {
@@ -468,11 +480,12 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
   }
 
   // TODO: this is unsafe if clsp and htsp are called at the same time, one could undo the other.
-  async setZoneSetpoints(
+  async setZoneActivity(
     zone: string,
     clsp: number | null,
     htsp: number | null,
     hold_until: string | null,
+    fan: string | null = null,
   ): Promise<void> {
     await this.forceFetch();
     // Set to manual activity
@@ -487,6 +500,9 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     }
     if (htsp) {
       activity_obj['htsp'][0] = await this.roundSetpoint(htsp);
+    }
+    if (fan) {
+      activity_obj['fan'][0] = fan;
     }
     await this.push();
   }

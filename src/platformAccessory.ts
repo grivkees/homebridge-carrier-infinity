@@ -4,6 +4,7 @@ import { CarrierInfinityHomebridgePlatform } from './platform';
 
 import {
   ACTIVITY,
+  FAN_MODE,
   InfinityEvolutionSystemStatus,
   InfinityEvolutionSystemConfig,
   InfinityEvolutionSystemProfile,
@@ -12,6 +13,7 @@ import {
 
 export class InfinityEvolutionPlatformAccessory {
   private service: Service;
+  private fan_service?: Service;
   private system_status: InfinityEvolutionSystemStatus;
   private system_config: InfinityEvolutionSystemConfig;
   private system_profile: InfinityEvolutionSystemProfile;
@@ -48,6 +50,10 @@ export class InfinityEvolutionPlatformAccessory {
       this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps(bound_props);
       this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).setProps(bound_props);
       this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).setProps(bound_props);
+      this.service.setCharacteristic(
+        this.platform.Characteristic.Name,
+        await this.system_config.getZoneName(this.accessory.context.zone) + ' Thermostat',
+      );
     });
     this.system_profile = new InfinityEvolutionSystemProfile(
       this.platform.InfinityEvolutionApi,
@@ -65,6 +71,7 @@ export class InfinityEvolutionPlatformAccessory {
         const current_state = await this.system_status.getMode();
         switch(current_state) {
           case SYSTEM_MODE.OFF:
+          case SYSTEM_MODE.FAN_ONLY:
             return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
           case SYSTEM_MODE.COOL:
             return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
@@ -80,6 +87,7 @@ export class InfinityEvolutionPlatformAccessory {
         const target_state = await this.system_config.getMode();
         switch(target_state) {
           case SYSTEM_MODE.OFF:
+          case SYSTEM_MODE.FAN_ONLY:
             return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
           case SYSTEM_MODE.COOL:
             return this.platform.Characteristic.TargetHeatingCoolingState.COOL;
@@ -96,8 +104,18 @@ export class InfinityEvolutionPlatformAccessory {
           return;
         }
         switch(value) {
-          case this.platform.Characteristic.TargetHeatingCoolingState.OFF:
-            return await this.system_config.setMode(SYSTEM_MODE.OFF);
+          case this.platform.Characteristic.TargetHeatingCoolingState.OFF: {
+            // If manual fan is set, go to fan only mode
+            if (await this.system_config.getZoneActivityFan(
+              this.accessory.context.zone,
+              await this.getZoneActvity(this.accessory.context.zone),
+            ) !== FAN_MODE.OFF) {
+              return await this.system_config.setMode(SYSTEM_MODE.FAN_ONLY);
+            // If no manual fan, go to full off
+            } else {
+              return await this.system_config.setMode(SYSTEM_MODE.OFF);
+            }
+          }
           case this.platform.Characteristic.TargetHeatingCoolingState.COOL:
             return await this.system_config.setMode(SYSTEM_MODE.COOL);
           case this.platform.Characteristic.TargetHeatingCoolingState.HEAT:
@@ -150,7 +168,12 @@ export class InfinityEvolutionPlatformAccessory {
         switch (cmode) {
           case SYSTEM_MODE.COOL:
           case SYSTEM_MODE.HEAT:
-            return await this.system_config.setZoneSetpoints(this.accessory.context.zone, svalue, svalue, await this.getHoldTime()); 
+            return await this.system_config.setZoneActivity(
+              this.accessory.context.zone,
+              svalue,
+              svalue,
+              await this.getHoldTime(),
+            );
           default:
             return;
         }
@@ -169,14 +192,14 @@ export class InfinityEvolutionPlatformAccessory {
         if (value === this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value) {
           return;
         }
-        return await this.system_config.setZoneSetpoints(
+        return await this.system_config.setZoneActivity(
           this.accessory.context.zone,
           await this.convertCharTemp2SystemTemp(value),
           await this.convertCharTemp2SystemTemp(
             this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value,
           ),
           await this.getHoldTime(),
-        ); 
+        );
       });
 
     this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature)
@@ -192,19 +215,82 @@ export class InfinityEvolutionPlatformAccessory {
         if (value === this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value) {
           return;
         }
-        return await this.system_config.setZoneSetpoints(
+        return await this.system_config.setZoneActivity(
           this.accessory.context.zone,
           await this.convertCharTemp2SystemTemp(
             this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value,
           ),
           await this.convertCharTemp2SystemTemp(value),
           await this.getHoldTime(),
-        ); 
+        );
       });
 
     this.service.getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
       .onGet(async () => {
         return await this.system_status.getZoneHumidity(this.accessory.context.zone);
+      });
+
+    // Fan Control
+    this.fan_service = this.accessory.getService(this.platform.Service.Fanv2);
+    if (this.platform.config['showFanControl']) {
+      this.setupFanService();
+    } else if (this.fan_service) {
+      this.accessory.removeService(this.fan_service);
+    }
+  }
+
+  setupFanService(): void {
+    this.fan_service = this.fan_service || this.accessory.addService(this.platform.Service.Fanv2);
+
+    this.system_config.fetch().then(async () => {
+      this.fan_service?.setCharacteristic(
+        this.platform.Characteristic.Name,
+        await this.system_config.getZoneName(this.accessory.context.zone) + ' Fan',
+      );
+    });
+
+    this.fan_service.getCharacteristic(this.platform.Characteristic.Active)
+      .onGet(async () => {
+        return await this.system_config.getZoneActivityFan(
+          this.accessory.context.zone,
+          await this.getZoneActvity(this.accessory.context.zone),
+        ) === FAN_MODE.OFF ?
+          this.platform.Characteristic.Active.INACTIVE :
+          this.platform.Characteristic.Active.ACTIVE;
+      });
+
+    this.fan_service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
+      .setProps({minValue: 0, maxValue: 3, minStep: 1})
+      .onGet(async () => {
+        return this.convertSystemFan2CharFan(
+          await this.system_config.getZoneActivityFan(this.accessory.context.zone, await this.getZoneActvity(this.accessory.context.zone)),
+        );
+      })
+      .onSet(async (value) => {
+        // Make sure system mode is right for manual fan settings
+        if (
+          await this.system_config.getMode() === SYSTEM_MODE.OFF &&
+        this.convertCharFan2SystemFan(value) !== FAN_MODE.OFF
+        ) {
+          await this.system_config.setMode(SYSTEM_MODE.FAN_ONLY);
+        } else if (
+          await this.system_config.getMode() === SYSTEM_MODE.FAN_ONLY &&
+        this.convertCharFan2SystemFan(value) === FAN_MODE.OFF
+        ) {
+          await this.system_config.setMode(SYSTEM_MODE.OFF);
+        }
+        // Set zone activity
+        return await this.system_config.setZoneActivity(
+          this.accessory.context.zone,
+          await this.convertCharTemp2SystemTemp(
+            this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value,
+          ),
+          await this.convertCharTemp2SystemTemp(
+            this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value,
+          ),
+          await this.getHoldTime(),
+          this.convertCharFan2SystemFan(value),
+        );
       });
   }
 
@@ -257,6 +343,32 @@ export class InfinityEvolutionPlatformAccessory {
       return (9.0 / 5.0 * temp) + 32;
     } else {
       return temp;
+    }
+  }
+
+  convertSystemFan2CharFan(fan: string): CharacteristicValue {
+    switch(fan) {
+      case FAN_MODE.LOW:
+        return 1;
+      case FAN_MODE.MED:
+        return 2;
+      case FAN_MODE.HIGH:
+        return 3;
+      default:
+        return 0;
+    }
+  }
+
+  convertCharFan2SystemFan(fan: CharacteristicValue): string {
+    switch (fan) {
+      case 1:
+        return FAN_MODE.LOW;
+      case 2:
+        return FAN_MODE.MED;
+      case 3:
+        return FAN_MODE.HIGH;
+      default:
+        return FAN_MODE.OFF;
     }
   }
 }
