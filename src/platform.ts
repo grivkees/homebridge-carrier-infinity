@@ -2,7 +2,12 @@ import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, 
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { InfinityEvolutionPlatformAccessory } from './platformAccessory';
-import { InfinityEvolutionApi, InfinityEvolutionLocations, InfinityEvolutionSystemProfile } from './infinityApi';
+import {
+  InfinityEvolutionApi,
+  InfinityEvolutionLocations,
+  InfinityEvolutionSystemProfile,
+  InfinityEvolutionSystemConfig,
+} from './infinityApi';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -37,8 +42,9 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     }
 
     this.api.on('didFinishLaunching', () => {
-      this.discoverDevices();
-      // TODO: remove accessories no longer in remote system
+      this.discoverDevices().then().catch(error => {
+        this.log.error('Could not discover devices: ' + error.message);
+      });
     });
   }
 
@@ -46,41 +52,40 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     this.accessories.push(accessory);
   }
 
-  registerAccessory(serialNumber: string, zone: string): void {
-    const uuid = this.api.hap.uuid.generate(String(serialNumber));
-    const existingAccessory = this.accessories.find(accessory => accessory.UUID === uuid);
-    if (existingAccessory) {
-      new InfinityEvolutionPlatformAccessory(this, existingAccessory);
-      this.api.updatePlatformAccessories([existingAccessory]);
-    } else {
-      const name = `${serialNumber}:${zone}`;
+  async registerAccessory(serialNumber: string, zone: string): Promise<PlatformAccessory> {
+    let is_new = false;
+    const uuid = this.api.hap.uuid.generate(`${serialNumber}:${zone}`);
+    let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
+    if (!accessory) {
+      const name = await new InfinityEvolutionSystemConfig(this.InfinityEvolutionApi, serialNumber).getZoneName(zone);
       this.log.info('Adding new accessory:', name);
-      const accessory = new this.api.platformAccessory(name, uuid);
-      accessory.context.serialNumber = serialNumber;
-      accessory.context.zone = zone;
-      new InfinityEvolutionPlatformAccessory(this, accessory);
-      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+      accessory = new this.api.platformAccessory(name, uuid);
+      is_new = true;
     }
+    accessory.context.serialNumber = serialNumber;
+    accessory.context.zone = zone;
+    new InfinityEvolutionPlatformAccessory(this, accessory);
+    if (is_new) {
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    } else {
+      this.api.updatePlatformAccessories([accessory]);
+    }
+    return accessory;
   }
 
-  discoverDevices(): void {
-    new InfinityEvolutionLocations(this.InfinityEvolutionApi).getSystems()
-      .then(systems => {
-        for (const name in systems) {
-          const serialNumber = systems[name];
-          new InfinityEvolutionSystemProfile(
-            this.InfinityEvolutionApi,
-            serialNumber,
-          ).getZones().then(zones => {
-            for (const zone in zones) {
-              this.registerAccessory(serialNumber, zone);
-            }
-          });
-        }
-      })
-      .catch(error => {
-        this.log.error('Could not discover devices: ' + error.message);
-      });
-
+  async discoverDevices(): Promise<void> {
+    const systems = await new InfinityEvolutionLocations(this.InfinityEvolutionApi).getSystems();
+    const accessories: PlatformAccessory[] = [];
+    for (const name in systems) {
+      const serialNumber = systems[name];
+      const zones = await new InfinityEvolutionSystemProfile(this.InfinityEvolutionApi, serialNumber).getZones();
+      for (const zone in zones) {
+        accessories.push(await this.registerAccessory(serialNumber, zone));
+      }
+    }
+    const old_accessories = this.accessories.filter(
+      accesory => !accessories.includes(accesory),
+    );
+    this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, old_accessories);
   }
 }
