@@ -49,9 +49,8 @@ export class InfinityEvolutionPlatformAccessory {
     );
     this.system_profile.fetch().then(async () => {
       this.accessory.getService(this.platform.Service.AccessoryInformation)!
-        .setCharacteristic(this.platform.Characteristic.Manufacturer, await this.system_profile.getBrand())
-        .setCharacteristic(this.platform.Characteristic.Model, await this.system_profile.getModel())
-        .setCharacteristic(this.platform.Characteristic.FirmwareRevision, await this.system_profile.getFirmware());
+        .setCharacteristic(this.platform.Characteristic.Manufacturer, `${await this.system_profile.getBrand()} Home`)
+        .setCharacteristic(this.platform.Characteristic.Model, await this.system_profile.getModel());
     });
         
     // Create handlers
