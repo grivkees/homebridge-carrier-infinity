@@ -195,17 +195,13 @@ export class InfinityEvolutionLocations extends BaseInfinityEvolutionApiModel {
     return `/users/${this.InfinityEvolutionApi.username}/locations`;
   }
 
-  async getSystems(): Promise<Record<string, string>> {
+  async getSystems(): Promise<string[]> {
     await this.fetch();
-    const systems = {};
-    const locations = this.data_object.locations.location;
-    for (const i in locations) {
-      const locaton = locations[i];
-      for (const j in locaton.systems) {
-        const system = locaton.systems[j].system[0];
+    const systems: string[] = [];
+    for (const location of this.data_object.locations.location) {
+      for (const system of location.systems[0].system) {
         const linkparts = system['atom:link'][0]['$']['href'].split('/');
-        const name = system['atom:link'][0]['$']['title'];
-        systems[name] = linkparts[linkparts.length - 1];
+        systems.push(linkparts[linkparts.length - 1]);
       }
     }
     return systems;

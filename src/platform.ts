@@ -53,6 +53,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   }
 
   async registerAccessory(serialNumber: string, zone: string): Promise<PlatformAccessory> {
+    this.log.info(`Discovered device serial:${serialNumber} zone:${zone}`);
     let is_new = false;
     const uuid = this.api.hap.uuid.generate(`${serialNumber}:${zone}`);
     let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
@@ -76,9 +77,9 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   async discoverDevices(): Promise<void> {
     const systems = await new InfinityEvolutionLocations(this.InfinityEvolutionApi).getSystems();
     const accessories: PlatformAccessory[] = [];
-    for (const name in systems) {
-      const serialNumber = systems[name];
+    for (const serialNumber of systems) {
       const zones = await new InfinityEvolutionSystemProfile(this.InfinityEvolutionApi, serialNumber).getZones();
+      // TODO: messed up here. This is the zone index, not the zone id. index = id - 1
       for (const zone in zones) {
         accessories.push(await this.registerAccessory(serialNumber, zone));
       }
@@ -86,6 +87,9 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     const old_accessories = this.accessories.filter(
       accesory => !accessories.includes(accesory),
     );
+    old_accessories.forEach(accessory => {
+      this.log.info(`Removing old device serial:${accessory.context.serialNumber} zone:${accessory.context.zone}`);
+    });
     this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, old_accessories);
   }
 }
