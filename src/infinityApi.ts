@@ -25,7 +25,9 @@ interface ZoneActivity extends BaseElement {
 interface ZoneProgram {
   day: {
     period: {
-      time: string;
+      time: string[];
+      activity: string[];
+      enabled: string[];
     }[];
   }[];
 }
@@ -361,12 +363,30 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     return zone_obj['name'][0];
   }
 
-  async getZoneActivity(zone: string): Promise<string | null> {
+  async getZoneActivity(zone: string): Promise<string> {
     const zone_obj = await this.getZone(zone);
-    if (zone_obj['hold'][0] === 'on') {
+    if (zone_obj.hold[0] === 'on') {
       return zone_obj.holdActivity![0];
+    } else {
+      const now = new Date();
+      const program_obj = (await this.getZone(zone)).program![0];
+      const today_schedule = program_obj.day[now.getDay()].period.filter(period => period.enabled[0] === 'on').reverse();
+      for (const i in today_schedule) {
+        const time = today_schedule[i].time[0];
+        const split = time.split(':');
+        if (
+          // The hour is past
+          Number(split[0]) < now.getHours() ||
+          // The hour is now, the minute is past
+          (Number(split[0]) === now.getHours() && Number(split[1]) < now.getMinutes())
+        ) {
+          return today_schedule[i].activity[0];
+        }
+      }
+      // If we got to the end without finding the next activity, it means the activity is the last from yesterday
+      const yesterday_schedule = program_obj['day'][(now.getDay() + 8) % 7].period.filter(period => period.enabled[0] === 'on').reverse();
+      return yesterday_schedule[0].activity[0];
     }
-    return null;
   }
 
   private async getZoneActivityConfig(zone: string, activity_name: string): Promise<ZoneActivity> {

@@ -37,10 +37,6 @@ You can choose how you want changes made via homekit to interact with the activi
 * `for_x`: Changes made via homekit will persist for `HH:MM` from now. Then scheduled activities will resume. (Set time via `holdArgument` setting.)
 * `forever`: Changes made via homekit will persist indefinitely. Scheduled activites will not resume until you remove the manual hold via the thermostat.
 
-# Known Issues
-
-* Removing a hold via the thermostat or Carrier/Bryant app may take several minutes to show up in homekit.
-
 # Non-Issues
 
 * It may take 1-2 minutes from the time you make a change via homekit until your thermostat sees the change. This is a result of how the thermostats poll for updates.
