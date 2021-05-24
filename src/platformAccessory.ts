@@ -2,7 +2,13 @@ import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
 
 import { CarrierInfinityHomebridgePlatform } from './platform';
 
-import { InfinityEvolutionSystemStatus, InfinityEvolutionSystemConfig, InfinityEvolutionSystemProfile, SYSTEM_MODE } from './infinityApi';
+import {
+  ACTIVITY,
+  InfinityEvolutionSystemStatus,
+  InfinityEvolutionSystemConfig,
+  InfinityEvolutionSystemProfile,
+  SYSTEM_MODE,
+} from './infinityApi';
 
 export class InfinityEvolutionPlatformAccessory {
   private service: Service;
@@ -203,6 +209,11 @@ export class InfinityEvolutionPlatformAccessory {
   }
 
   async getZoneActvity(zone: string): Promise<string> {
+    // Vacation scheduling is weird, and changes infrequently. Just get it from status.
+    if (await this.system_status.getZoneActivity(zone) === ACTIVITY.VACATION) {
+      return ACTIVITY.VACATION;
+    }
+    // Config has more up to date activity settings.
     return await this.system_config.getZoneActivity(zone);
   }
 

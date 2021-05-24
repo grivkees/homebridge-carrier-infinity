@@ -13,6 +13,15 @@ export const SYSTEM_MODE = {
   AUTO: 'auto',
 };
 
+export const ACTIVITY = {
+  HOME: 'home',
+  AWAY: 'away',
+  SLEEP: 'sleep',
+  WAKE: 'wake',
+  MANUAL: 'manual',
+  VACATION: 'vacation',
+};
+
 interface BaseElement {
   '$': {id: string};
 }
@@ -390,6 +399,16 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
   }
 
   private async getZoneActivityConfig(zone: string, activity_name: string): Promise<ZoneActivity> {
+    await this.fetch();
+    // Vacation is stored somewhere else...
+    if (activity_name === ACTIVITY.VACATION) {
+      return {
+        '$': {id: ACTIVITY.VACATION},
+        clsp: this.data_object.config.vacmaxt,
+        htsp: this.data_object.config.vacmint,
+      };
+    }
+
     const activites_obj = (await this.getZone(zone)).activities![0];
     return activites_obj['activity'].find(
       (activity: ZoneActivity) => activity['$'].id === activity_name,
@@ -447,11 +466,11 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     await this.forceFetch();
     // Set to manual activity
     const zone_obj = await this.getZone(zone);
-    zone_obj['holdActivity']![0] = 'manual';
+    zone_obj['holdActivity']![0] = ACTIVITY.MANUAL;
     zone_obj['hold'][0] = 'on';
     zone_obj['otmr'][0] = hold_until || '';
     // Set setpoints on manual activity
-    const activity_obj = await this.getZoneActivityConfig(zone, 'manual');
+    const activity_obj = await this.getZoneActivityConfig(zone, ACTIVITY.MANUAL);
     if (clsp) {
       activity_obj['clsp'][0] = await this.roundSetpoint(clsp);
     }
