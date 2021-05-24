@@ -285,6 +285,10 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
       case 'gasheat':
       case 'electric':
         return SYSTEM_MODE.HEAT;
+      case 'dehumidify':
+        return SYSTEM_MODE.COOL;
+      case 'fanonly':
+        return SYSTEM_MODE.OFF;
       default:
         return raw_mode;
     }
