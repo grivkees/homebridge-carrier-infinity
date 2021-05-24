@@ -287,6 +287,11 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     return this.data_object.status.cfgem[0];
   }
 
+  async getOutdoorTemp(): Promise<number> {
+    await this.fetch();
+    return Number(this.data_object.status.oat[0]);
+  }
+
   async getMode(): Promise<string> {
     await this.fetch();
     const raw_mode = this.data_object.status.mode[0];

@@ -1,7 +1,8 @@
-import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
+import { API, Categories, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { InfinityEvolutionPlatformAccessory } from './platformAccessory';
+import { OutdoorTemperatureAccessory } from './oatAccessory';
 import {
   InfinityEvolutionApi,
   InfinityEvolutionLocations,
@@ -74,6 +75,27 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     return accessory;
   }
 
+  async registerOutdoorTempAccessory(serialNumber: string): Promise<PlatformAccessory> {
+    this.log.info(`Discovered temp sensor device serial:${serialNumber}`);
+    let is_new = false;
+    const uuid = this.api.hap.uuid.generate(`OAT:${serialNumber}`);
+    let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
+    if (!accessory) {
+      const name = 'Outdoor Temperature';
+      this.log.info('Adding new accessory: ', name);
+      accessory = new this.api.platformAccessory(name, uuid, Categories.SENSOR);
+      is_new = true;
+    }
+    accessory.context.serialNumber = serialNumber;
+    new OutdoorTemperatureAccessory(this, accessory);
+    if (is_new) {
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    } else {
+      this.api.updatePlatformAccessories([accessory]);
+    }
+    return accessory;
+  }
+
   async discoverDevices(): Promise<void> {
     const systems = await new InfinityEvolutionLocations(this.InfinityEvolutionApi).getSystems();
     const accessories: PlatformAccessory[] = [];
@@ -83,12 +105,17 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       for (const zone in zones) {
         accessories.push(await this.registerAccessory(serialNumber, zone));
       }
+      if (this.config['showOutdoorTemperatureSensor']) {
+        accessories.push(await this.registerOutdoorTempAccessory(serialNumber));
+      }
     }
     const old_accessories = this.accessories.filter(
       accesory => !accessories.includes(accesory),
     );
     old_accessories.forEach(accessory => {
-      this.log.info(`Removing old device serial:${accessory.context.serialNumber} zone:${accessory.context.zone}`);
+      this.log.info(
+        `Removing old device "${accessory.displayName}" (serial:${accessory.context.serialNumber} zone:${accessory.context.zone})`,
+      );
     });
     this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, old_accessories);
   }
