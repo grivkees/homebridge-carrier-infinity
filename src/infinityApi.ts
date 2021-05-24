@@ -301,7 +301,7 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
         return SYSTEM_MODE.HEAT;
       case 'dehumidify':
         return SYSTEM_MODE.COOL;
-      case 'fanonly':
+      case 'fanonly':  // fan only means no heat or cool
         return SYSTEM_MODE.OFF;
       default:
         return raw_mode;
@@ -356,7 +356,13 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
 
   async getMode(): Promise<string> {
     await this.fetch();
-    return this.data_object.config.mode[0];
+    const raw_mode = this.data_object.config.mode[0];
+    switch(raw_mode) {
+      case 'fanonly':  // fan only means no heat or cool
+        return SYSTEM_MODE.OFF;
+      default:
+        return raw_mode;
+    }
   }
 
   async setMode(mode: string): Promise<void> {
