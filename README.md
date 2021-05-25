@@ -33,12 +33,12 @@ If you have not already done so, you will first need to create an account and li
 
 ## Hold Behavior / Hold Argument
 
-You can choose how you want changes made via homekit to interact with the activity schedules of your thermostat using the `holdBehavior` setting.
+You can choose how you want changes made via HomeKit to interact with the activity schedules of your thermostat using the `holdBehavior` setting.
 
-* `activity`: Changes made via homekit will persist until the beginning of the next scheduled activity. Then scheduled activities will resume.
-* `until_x`: Changes made via homekit will persist until the time `HH:MM`. Then scheduled activities will resume. (Set time via `holdArgument` setting.)
-* `for_x`: Changes made via homekit will persist for `HH:MM` from now. Then scheduled activities will resume. (Set time via `holdArgument` setting.)
-* `forever`: Changes made via homekit will persist indefinitely. Scheduled activites will not resume until you remove the manual hold via the thermostat.
+* `activity`: Changes made via HomeKit will persist until the beginning of the next scheduled activity. Then scheduled activities will resume.
+* `until_x`: Changes made via HomeKit will persist until the time `HH:MM`. Then scheduled activities will resume. (Set time via `holdArgument` setting.)
+* `for_x`: Changes made via HomeKit will persist for `HH:MM` from now. Then scheduled activities will resume. (Set time via `holdArgument` setting.)
+* `forever`: Changes made via HomeKit will persist indefinitely. Scheduled activites will not resume until you remove the manual hold via the thermostat.
 
 ## Fan Control
 
@@ -46,6 +46,7 @@ Enabling the `showFanControl` option will show a HomeKit fan accessory that can 
 
 * Turning on the fan accessory puts the fan in 'Manual' mode with the selected speed (Low/Med/High).
 * Turning off the fan accessory puts the fan in 'Auto' mode (when heat/cool/auto is active) or 'Off' mode (when system is off).
+* Fan control changes made via HomeKit interact with the activity schedules of your thermostat based on the `holdBehavior` setting.
 
 ## Outdoor Temperature Sensor
 
@@ -53,11 +54,11 @@ Enabling the `showOutdoorTemperatureSensor` option will show a HomeKit sensor ac
 
 # Non-Issues
 
-* It may take 1-2 minutes from the time you make a change via homekit until your thermostat sees the change. This is an unavoidable result of how the thermostats poll for updates.
+* It may take 1-2 minutes from the time you make a change via HomeKit until your thermostat sees the change. This is an unavoidable result of how the thermostats poll for updates.
 
 # Disclaimer
 
-This is beta software. I have only tested this on my single system / single zone Bryant Evolution system.
+This is beta software. I have only tested this on my single system / single zone Bryant Evolution system. (Though other people have used it successfully with multi-zone and multi-system setups.)
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
