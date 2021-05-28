@@ -25,22 +25,18 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     public readonly config: PlatformConfig,
     public readonly api: API,
   ) {
-    if (
-      typeof config['username'] === 'string' &&
-      typeof config['password'] === 'string'
-    ) {
-      this.InfinityEvolutionApi = new InfinityEvolutionApi(config['username'], config['password']);
-      this.InfinityEvolutionApi.refreshToken()
-        .then(() => {
-          this.log.info('Login success.');
-        })
-        .catch(error => {
-          this.log.error('Login error: ', error.message);
-          throw error;
-        });
-    } else {
-      throw new Error('Login credentials not set.');
+    if (!config.username || !config.password) {
+      this.log.warn('Username and password do not appear to be set in config. This is not going to work.');
     }
+
+    this.InfinityEvolutionApi = new InfinityEvolutionApi(config['username'], config['password'], this.log);
+    this.InfinityEvolutionApi.refreshToken()
+      .then(() => {
+        this.log.info('Login success!');
+      })
+      .catch(error => {
+        this.log.error('Login error: ', error.message);
+      });
 
     this.api.on('didFinishLaunching', () => {
       this.discoverDevices().then().catch(error => {
