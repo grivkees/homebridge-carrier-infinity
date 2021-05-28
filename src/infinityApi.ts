@@ -5,6 +5,7 @@ import oauthSignature from 'oauth-signature';
 import { MemoizeExpiring } from 'typescript-memoize';
 import { Mutex } from 'async-mutex';
 import * as xml2js from 'xml2js';
+import { Logger } from 'homebridge';
 
 export const SYSTEM_MODE = {
   OFF: 'off',
@@ -116,7 +117,8 @@ export class InfinityEvolutionApi {
 
   constructor(
     public username: string,
-    private password: string) {
+    private password: string,
+    public readonly log: Logger) {
     this.axios = Axios.create({
       baseURL: INFINITY_API_BASE_URL,
       headers: {
@@ -140,18 +142,28 @@ export class InfinityEvolutionApi {
       + '</credentials>';
     const data = `data=${encodeURIComponent(loginxml)}`;
 
-    const response = await this.axios.post(
-      '/users/authenticated',
-      data,
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          Accept: 'application/json',
+    try {
+      const response = await this.axios.post(
+        '/users/authenticated',
+        data,
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            Accept: 'application/json',
+          },
         },
-      },
-    );
-    // TODO: handle possible errors
-    this.token = response.data['result']['accessToken'];
+      );
+
+      if (response.data.error) {
+        this.log.error('Failed to login: ', response.data.error.message);
+      } else if (response.data.result) {
+        this.token = response.data.result.accessToken;
+      } else {
+        this.log.error('Could not find refreshed api access token.');
+      }
+    } catch (error) {
+      this.log.error('Could not refresh api access token: ', error.message);
+    }
   }
 }
 
@@ -176,9 +188,12 @@ abstract class BaseInfinityEvolutionApiModel {
 
   protected async forceFetch(): Promise<void> {
     await this.InfinityEvolutionApi.refreshToken();
-    // TODO: handle errors
-    const response = await this.InfinityEvolutionApi.axios.get(this.getPath());
-    this.data_object = await xml2js.parseStringPromise(response.data);
+    try {
+      const response = await this.InfinityEvolutionApi.axios.get(this.getPath());
+      this.data_object = await xml2js.parseStringPromise(response.data);
+    } catch (error) {
+      this.InfinityEvolutionApi.log.error('Failed to fetch updates: ', error.message);
+    }
   }
 
   async push(): Promise<void> {
@@ -191,16 +206,19 @@ abstract class BaseInfinityEvolutionApiModel {
     const builder = new xml2js.Builder();
     const new_xml = builder.buildObject(this.data_object);
     const data = `data=${encodeURIComponent(new_xml)}`;
-    // TODO: handle errors
-    await this.InfinityEvolutionApi.axios.post(
-      this.getPath(),
-      data,
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+    try {
+      await this.InfinityEvolutionApi.axios.post(
+        this.getPath(),
+        data,
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
         },
-      },
-    );
+      );
+    } catch (error) {
+      this.InfinityEvolutionApi.log.error('Failed to push updates: ', error.message);
+    }
     await this.forceFetch();
   }
 }

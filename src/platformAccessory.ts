@@ -78,7 +78,8 @@ export class InfinityEvolutionPlatformAccessory {
           case SYSTEM_MODE.HEAT:
             return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
           default:
-            throw Error(`Unknown current state '${current_state}'`);
+            this.platform.log.error(`Unknown current state '${current_state}'. Defaulting to off.`);
+            return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
         }
       });
 
@@ -96,7 +97,8 @@ export class InfinityEvolutionPlatformAccessory {
           case SYSTEM_MODE.AUTO:
             return this.platform.Characteristic.TargetHeatingCoolingState.AUTO;
           default:
-            throw Error(`Unknown target state '${target_state}'`);
+            this.platform.log.error(`Unknown target state '${target_state}'. Defaulting to off.`);
+            return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
         }
       })
       .onSet(async (value) => {
@@ -123,7 +125,7 @@ export class InfinityEvolutionPlatformAccessory {
           case this.platform.Characteristic.TargetHeatingCoolingState.AUTO:
             return await this.system_config.setMode(SYSTEM_MODE.AUTO);
           default:
-            throw Error(`Unknown target state ${value}`);
+            this.platform.log.error(`Don't know how to set target state '${value}'. Making no change.`);
         }
       });
     
@@ -320,7 +322,8 @@ export class InfinityEvolutionPlatformAccessory {
       case 'forever':
         return '';
       default:
-        throw new Error('Unknown hold behavior.');
+        this.platform.log.error('Invalid hold behavior setting. Defaulting to forever.');
+        return '';
     }
   }
 
@@ -336,9 +339,7 @@ export class InfinityEvolutionPlatformAccessory {
     if (temp === null) {
       return temp;
     }
-    if (typeof temp !== 'number') {
-      throw new Error(`Invalid target temp value ${temp}.`);
-    }
+    temp = Number(temp);
     if (await this.system_config.getUnits() === 'F') {
       return (9.0 / 5.0 * temp) + 32;
     } else {
