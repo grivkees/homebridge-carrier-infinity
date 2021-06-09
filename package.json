@@ -17,6 +17,7 @@
   },
   "main": "dist/index.js",
   "scripts": {
+    "commit": "git-cz",
     "lint": "eslint src/**.ts --max-warnings=0",
     "watch": "npm run build && npm link && nodemon",
     "build": "rimraf ./dist && tsc",
@@ -38,15 +39,24 @@
     "typescript-memoize": "^1.0.1"
   },
   "devDependencies": {
+    "@commitlint/cli": "^12.1.4",
+    "@commitlint/config-conventional": "^12.1.4",
+    "@commitlint/cz-commitlint": "^12.1.4",
     "@types/node": "^15.6.1",
     "@types/xml2js": "^0.4.8",
     "@typescript-eslint/eslint-plugin": "^4.6.1",
     "@typescript-eslint/parser": "^4.6.1",
+    "commitizen": "^4.2.4",
     "eslint": "^7.13.0",
     "homebridge": "^1.2.3",
     "nodemon": "^2.0.6",
     "rimraf": "^3.0.2",
     "ts-node": "^9.0.0",
     "typescript": "^4.0.5"
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/@commitlint/cz-commitlint"
+    }
   }
 }
