@@ -29,7 +29,10 @@
     "homekit",
     "thermostat",
     "carrier-infinity",
-    "bryant-evolution"
+    "bryant-evolution",
+    "infinity",
+    "infinitude",
+    "infinitive"
   ],
   "dependencies": {
     "async-mutex": "^0.3.1",
