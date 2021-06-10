@@ -1,6 +1,13 @@
-# homebridge-carrier-infinity
+<div align="center">
+
+# Homebridge Carrier Infinity
+
+[![verified by homebridge](https://badgen.net/badge/homebridge/verified/purple)](https://github.com/homebridge/homebridge/wiki/Verified-Plugins)
+[![npm version](https://badgen.net/npm/v/homebridge-carrier-infinity?icon=npm&label)](https://www.npmjs.com/package/homebridge-carrier-infinity)
+[![npm downloads](https://badgen.net/npm/dt/homebridge-carrier-infinity?label=downloads)](https://www.npmjs.com/package/homebridge-carrier-infinity)
 
 **Homebridge plugin for Carrier Infinity / Bryant Evolution / ICP Brands Ion thermostats.**
+</div>
 
 This is a standalone plugin for Homebridge that talks directly to the Infinity/Evolution/Ion api. It does not require Infinitude/Infinitive.
 
