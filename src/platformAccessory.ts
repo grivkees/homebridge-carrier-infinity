@@ -12,6 +12,7 @@ import {
 } from './infinityApi';
 import { FilterService } from './filterService';
 import { CharTempsAreClose } from './helpers';
+import { ThermostatRHService } from './humidifierService';
 
 export class InfinityEvolutionPlatformAccessory {
   private service: Service;
@@ -221,11 +222,6 @@ export class InfinityEvolutionPlatformAccessory {
         );
       });
 
-    this.service.getCharacteristic(this.platform.Characteristic.CurrentRelativeHumidity)
-      .onGet(async () => {
-        return await this.system_status.getZoneHumidity(this.accessory.context.zone);
-      });
-
     // Fan Control
     this.fan_service = this.accessory.getService(this.platform.Service.Fanv2);
     if (this.platform.config['showFanControl']) {
@@ -236,6 +232,13 @@ export class InfinityEvolutionPlatformAccessory {
 
     // Filter Control
     new FilterService(
+      this.platform.api,
+      system,
+      this.accessory.context,
+    ).wrap(this.service);
+
+    // Humidity Control
+    new ThermostatRHService(
       this.platform.api,
       system,
       this.accessory.context,

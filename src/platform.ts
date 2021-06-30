@@ -8,6 +8,7 @@ import {
   InfinityEvolutionLocations,
   InfinityEvolutionSystemModel,
 } from './infinityApi';
+import { EnvSensorAccessory } from './envsensorAccessory';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -71,8 +72,30 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     return accessory;
   }
 
+  async registerEnvSensorAccessory(system: InfinityEvolutionSystemModel, zone: string): Promise<PlatformAccessory> {
+    this.log.info(`Discovered environmental sensor device serial:${system.serialNumber}`);
+    let is_new = false;
+    const uuid = this.api.hap.uuid.generate(`ENVSENSOR:${system.serialNumber}:${zone}`);
+    let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
+    if (!accessory) {
+      const name = `${await system.config.getZoneName(zone)} Environmental Sensor`;
+      this.log.info('Adding new accessory: ', name);
+      accessory = new this.api.platformAccessory(name, uuid, Categories.SENSOR);
+      is_new = true;
+    }
+    accessory.context.serialNumber = system.serialNumber;
+    accessory.context.zone = zone;
+    new EnvSensorAccessory(this, accessory);
+    if (is_new) {
+      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    } else {
+      this.api.updatePlatformAccessories([accessory]);
+    }
+    return accessory;
+  }
+
   async registerOutdoorTempAccessory(system: InfinityEvolutionSystemModel): Promise<PlatformAccessory> {
-    this.log.info(`Discovered temp sensor device serial:${system.serialNumber}`);
+    this.log.info(`Discovered outdoor temp sensor device serial:${system.serialNumber}`);
     let is_new = false;
     const uuid = this.api.hap.uuid.generate(`OAT:${system.serialNumber}`);
     let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
@@ -102,6 +125,9 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       // TODO: messed up here. This is the zone index, not the zone id. index = id - 1
       for (const zone in zones) {
         accessories.push(await this.registerAccessory(system, zone));
+        if (this.config['showIndoorHumiditySensors']) {
+          accessories.push(await this.registerEnvSensorAccessory(system, zone));
+        }
       }
       if (this.config['showOutdoorTemperatureSensor']) {
         accessories.push(await this.registerOutdoorTempAccessory(system));

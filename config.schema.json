@@ -36,7 +36,7 @@
         "pattern": "^[0-2][0-9]:[0-5][0-9]$",
         "condition": {
           "functionBody": "return model.holdBehavior.endsWith('_x');"
-      }
+        }
       },
       "showOutdoorTemperatureSensor": {
         "title": "Show Outdoor Temperature Sensors",
@@ -46,6 +46,12 @@
       },
       "showFanControl": {
         "title": "Show Fan Control",
+        "type": "boolean",
+        "default": false,
+        "required": true
+      },
+      "showIndoorHumiditySensors": {
+        "title": "Show Thermostat Humidity as Discrete Sensor",
         "type": "boolean",
         "default": false,
         "required": true
@@ -94,7 +100,12 @@
           "type": "help",
           "helpvalue": "<em class='primary-text'>Show additional environmental sensors in HomeKit.</em>"
         },
-        "showOutdoorTemperatureSensor"
+        "showOutdoorTemperatureSensor",
+        {
+          "type": "help",
+          "helpvalue": "<em class='primary-text'>Show the thermostat's environmental sensors as discete sensors in HomeKit (as opposed to only being shown as part of the thermostat accessory in HomeKit).</em>"
+        },
+        "showIndoorHumiditySensors"
       ]
     }
   ]
