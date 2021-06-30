@@ -10,7 +10,7 @@ import {
   InfinityEvolutionSystemProfile,
   SYSTEM_MODE,
 } from './infinityApi';
-import { InfinityFilterServiceDecorator } from './serviceDecorators';
+import { FilterService } from './filterService';
 import { CharTempsAreClose } from './helpers';
 
 export class InfinityEvolutionPlatformAccessory {
@@ -235,7 +235,10 @@ export class InfinityEvolutionPlatformAccessory {
     }
 
     // Filter Control
-    new InfinityFilterServiceDecorator(this.platform, this.system_status).add_handlers(this.service);
+    new FilterService(
+      system,
+      this.accessory.context,
+    ).wrap(this.service);
   }
 
   setupFanService(): void {
