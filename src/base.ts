@@ -1,9 +1,4 @@
-import {
-  InfinityEvolutionApi,
-  InfinityEvolutionSystemConfig,
-  InfinityEvolutionSystemProfile,
-  InfinityEvolutionSystemStatus,
-} from './infinityApi';
+import { InfinityEvolutionSystemModel } from './infinityApi';
 import { Characteristic, Service } from 'hap-nodejs';
 import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
 
@@ -12,27 +7,10 @@ import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
 */
 
 class Wrapper {
-  protected system_status: InfinityEvolutionSystemStatus;
-  protected system_config: InfinityEvolutionSystemConfig;
-  protected system_profile: InfinityEvolutionSystemProfile;
-
   constructor(
-        protected readonly InfinityEvolutionApi: InfinityEvolutionApi,
+        protected readonly system: InfinityEvolutionSystemModel,
         protected readonly context: UnknownContext,
-  ) {
-    this.system_status = new InfinityEvolutionSystemStatus(
-      InfinityEvolutionApi,
-      this.context.serialNumber,
-    );
-    this.system_config = new InfinityEvolutionSystemConfig(
-      InfinityEvolutionApi,
-      this.context.serialNumber,
-    );
-    this.system_profile = new InfinityEvolutionSystemProfile(
-      InfinityEvolutionApi,
-      this.context.serialNumber,
-    );
-  }
+  ) {}
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   wrap(service: Service): void {
@@ -46,7 +24,7 @@ export abstract class MultiWrapper extends Wrapper {
   wrap(service: Service): void {
     for (const ctype of this.WRAPPERS) {
       new ctype(
-        this.InfinityEvolutionApi,
+        this.system,
         this.context,
       ).wrap(service);
     }
@@ -71,11 +49,11 @@ export abstract class CharacteristicWrapper extends Wrapper {
 
 export class AccessoryInformation extends Wrapper {
   wrap(service: Service): void {
-    this.system_profile.fetch().then(async () => {
+    this.system.profile.fetch().then(async () => {
       service
-        .setCharacteristic(Characteristic.SerialNumber, this.context.serialNumber)
-        .setCharacteristic(Characteristic.Manufacturer, `${await this.system_profile.getBrand()} Home`)
-        .setCharacteristic(Characteristic.Model, await this.system_profile.getModel());
+        .setCharacteristic(Characteristic.SerialNumber, this.system.serialNumber)
+        .setCharacteristic(Characteristic.Manufacturer, `${await this.system.profile.getBrand()} Home`)
+        .setCharacteristic(Characteristic.Model, await this.system.profile.getModel());
     });
   }
 }
