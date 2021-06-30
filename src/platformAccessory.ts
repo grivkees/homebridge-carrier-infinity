@@ -23,6 +23,7 @@ export class InfinityEvolutionPlatformAccessory {
     private readonly platform: CarrierInfinityHomebridgePlatform,
     private readonly accessory: PlatformAccessory,
   ) {
+    const system = this.platform.systems[this.accessory.context.serialNumber];
     // Create services
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.serialNumber);
@@ -32,15 +33,9 @@ export class InfinityEvolutionPlatformAccessory {
     );
 
     // Create accessory api bridge
-    this.system_status = new InfinityEvolutionSystemStatus(
-      this.platform.InfinityEvolutionApi,
-      this.accessory.context.serialNumber,
-    );
+    this.system_status = system.status;
     this.system_status.fetch().then();
-    this.system_config = new InfinityEvolutionSystemConfig(
-      this.platform.InfinityEvolutionApi,
-      this.accessory.context.serialNumber,
-    );
+    this.system_config = system.config;
     this.system_config.fetch().then(async () => {
       this.service.setCharacteristic(this.platform.Characteristic.Name, await this.system_config.getZoneName(this.accessory.context.zone));
       const temp_bounds = await this.system_config.getTempBounds();
@@ -56,10 +51,7 @@ export class InfinityEvolutionPlatformAccessory {
         await this.system_config.getZoneName(this.accessory.context.zone) + ' Thermostat',
       );
     });
-    this.system_profile = new InfinityEvolutionSystemProfile(
-      this.platform.InfinityEvolutionApi,
-      this.accessory.context.serialNumber,
-    );
+    this.system_profile = system.profile;
     this.system_profile.fetch().then(async () => {
       this.accessory.getService(this.platform.Service.AccessoryInformation)!
         .setCharacteristic(this.platform.Characteristic.Manufacturer, `${await this.system_profile.getBrand()} Home`)

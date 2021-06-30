@@ -111,7 +111,7 @@ class OAuthHeaders {
   }
 }
 
-export class InfinityEvolutionApi {
+export class InfinityEvolutionApiConnection {
   private token = '';
   public axios: AxiosInstance;
 
@@ -174,7 +174,7 @@ abstract class BaseInfinityEvolutionApiModel {
   protected write_lock: Mutex;
 
   constructor(
-    protected readonly InfinityEvolutionApi: InfinityEvolutionApi,
+    protected readonly api_connection: InfinityEvolutionApiConnection,
   ) {
     this.write_lock = new Mutex();
   }
@@ -187,12 +187,12 @@ abstract class BaseInfinityEvolutionApiModel {
   }
 
   protected async forceFetch(): Promise<void> {
-    await this.InfinityEvolutionApi.refreshToken();
+    await this.api_connection.refreshToken();
     try {
-      const response = await this.InfinityEvolutionApi.axios.get(this.getPath());
+      const response = await this.api_connection.axios.get(this.getPath());
       this.data_object = await xml2js.parseStringPromise(response.data);
     } catch (error) {
-      this.InfinityEvolutionApi.log.error('Failed to fetch updates: ', error.message);
+      this.api_connection.log.error('Failed to fetch updates: ', error.message);
     }
   }
 
@@ -207,7 +207,7 @@ abstract class BaseInfinityEvolutionApiModel {
     const new_xml = builder.buildObject(this.data_object);
     const data = `data=${encodeURIComponent(new_xml)}`;
     try {
-      await this.InfinityEvolutionApi.axios.post(
+      await this.api_connection.axios.post(
         this.getPath(),
         data,
         {
@@ -217,19 +217,15 @@ abstract class BaseInfinityEvolutionApiModel {
         },
       );
     } catch (error) {
-      this.InfinityEvolutionApi.log.error('Failed to push updates: ', error.message);
+      this.api_connection.log.error('Failed to push updates: ', error.message);
     }
     await this.forceFetch();
   }
 }
 
 export class InfinityEvolutionLocations extends BaseInfinityEvolutionApiModel {
-  constructor(api: InfinityEvolutionApi) {
-    super(api);
-  }
-
   getPath(): string {
-    return `/users/${this.InfinityEvolutionApi.username}/locations`;
+    return `/users/${this.api_connection.username}/locations`;
   }
 
   async getSystems(): Promise<string[]> {
@@ -249,10 +245,10 @@ abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolution
   public last_updated = 0;
 
   constructor(
-    api: InfinityEvolutionApi,
+    protected readonly api_connection: InfinityEvolutionApiConnection,
     public readonly serialNumber: string,
   ) {
-    super(api);
+    super(api_connection);
   }
 
   protected async forceFetch(): Promise<void> {
@@ -263,10 +259,6 @@ abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolution
 }
 
 export class InfinityEvolutionSystemProfile extends BaseInfinityEvolutionSystemApiModel {
-  constructor(api: InfinityEvolutionApi, serialNumber: string) {
-    super(api, serialNumber);
-  }
-
   getPath(): string {
     return `/systems/${this.serialNumber}/profile`;
   }
@@ -302,10 +294,6 @@ export class InfinityEvolutionSystemProfile extends BaseInfinityEvolutionSystemA
 }
 
 export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemApiModel {
-  constructor(api: InfinityEvolutionApi, serialNumber: string) {
-    super(api, serialNumber);
-  }
-
   getPath(): string {
     return `/systems/${this.serialNumber}/status`;
   }
@@ -370,10 +358,6 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
 }
 
 export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemApiModel {
-  constructor(api: InfinityEvolutionApi, serialNumber: string) {
-    super(api, serialNumber);
-  }
-
   getPath(): string {
     return `/systems/${this.serialNumber}/config`;
   }
@@ -528,5 +512,29 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
       activity_obj['fan'][0] = fan;
     }
     await this.push();
+  }
+}
+
+export class InfinityEvolutionSystemModel {
+  public status: InfinityEvolutionSystemStatus;
+  public config: InfinityEvolutionSystemConfig;
+  public profile: InfinityEvolutionSystemProfile;
+
+  constructor(
+    protected readonly api_connection: InfinityEvolutionApiConnection,
+    public readonly serialNumber: string,
+  ) {
+    this.status = new InfinityEvolutionSystemStatus(
+      api_connection,
+      serialNumber,
+    );
+    this.config = new InfinityEvolutionSystemConfig(
+      api_connection,
+      serialNumber,
+    );
+    this.profile = new InfinityEvolutionSystemProfile(
+      api_connection,
+      serialNumber,
+    );
   }
 }

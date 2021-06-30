@@ -8,8 +8,8 @@ class OATSensorTemp extends CharacteristicWrapper {
   ctype = Characteristic.CurrentTemperature;
   get = async () => {
     return convertSystemTemp2CharTemp(
-      await this.system_status.getOutdoorTemp(),
-      await this.system_status.getUnits(),
+      await this.system.status.getOutdoorTemp(),
+      await this.system.status.getUnits(),
     );
   };
 }
@@ -23,8 +23,9 @@ export class OutdoorTemperatureAccessory {
     private readonly platform: CarrierInfinityHomebridgePlatform,
     private readonly accessory: PlatformAccessory,
   ) {
+    const system = this.platform.systems[this.accessory.context.serialNumber];
     new OutdoorTempSensorService(
-      this.platform.InfinityEvolutionApi,
+      system,
       this.accessory.context,
     ).wrap(
       this.accessory.getService(this.platform.Service.TemperatureSensor) ||
@@ -32,7 +33,7 @@ export class OutdoorTemperatureAccessory {
     );
   
     new AccessoryInformation(
-      this.platform.InfinityEvolutionApi,
+      system,
       this.accessory.context,
     ).wrap(
       this.accessory.getService(this.platform.Service.AccessoryInformation) ||
