@@ -7,3 +7,11 @@ export function convertSystemTemp2CharTemp(temp: number, units: string): Charact
     return temp;
   }
 }
+
+export function CharTempsAreClose(t1: CharacteristicValue | null, t2: CharacteristicValue | null): boolean {
+  if (t1 && t2) {
+    return Math.abs( Number(t1) - Number(t2) ) < .1;
+  } else {
+    return false;
+  }
+}

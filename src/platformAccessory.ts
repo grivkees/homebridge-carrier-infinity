@@ -11,6 +11,7 @@ import {
   SYSTEM_MODE,
 } from './infinityApi';
 import { InfinityFilterServiceDecorator } from './serviceDecorators';
+import { CharTempsAreClose } from './helpers';
 
 export class InfinityEvolutionPlatformAccessory {
   private service: Service;
@@ -155,7 +156,7 @@ export class InfinityEvolutionPlatformAccessory {
         }
       })
       .onSet(async (value) => {
-        if (value === this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).value) {
+        if (CharTempsAreClose(value, this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).value)) {
           return;
         }
         const svalue = await this.convertCharTemp2SystemTemp(value);
@@ -184,7 +185,7 @@ export class InfinityEvolutionPlatformAccessory {
         );
       })
       .onSet(async (value) => {
-        if (value === this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value) {
+        if (CharTempsAreClose(value, this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value)) {
           return;
         }
         return await this.system_config.setZoneActivity(
@@ -207,7 +208,7 @@ export class InfinityEvolutionPlatformAccessory {
         );
       })
       .onSet(async (value) => {
-        if (value === this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value) {
+        if (CharTempsAreClose(value, this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value)) {
           return;
         }
         return await this.system_config.setZoneActivity(
