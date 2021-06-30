@@ -1,11 +1,10 @@
 import { PlatformAccessory } from 'homebridge';
-import { Characteristic } from 'hap-nodejs';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { AccessoryInformation, CharacteristicWrapper, MultiWrapper } from './base';
 import { convertSystemTemp2CharTemp } from './helpers';
 
 class OATSensorTemp extends CharacteristicWrapper {
-  ctype = Characteristic.CurrentTemperature;
+  ctype = this.Characteristic.CurrentTemperature;
   get = async () => {
     return convertSystemTemp2CharTemp(
       await this.system.status.getOutdoorTemp(),
@@ -25,6 +24,7 @@ export class OutdoorTemperatureAccessory {
   ) {
     const system = this.platform.systems[this.accessory.context.serialNumber];
     new OutdoorTempSensorService(
+      this.platform.api,
       system,
       this.accessory.context,
     ).wrap(
@@ -33,6 +33,7 @@ export class OutdoorTemperatureAccessory {
     );
   
     new AccessoryInformation(
+      this.platform.api,
       system,
       this.accessory.context,
     ).wrap(

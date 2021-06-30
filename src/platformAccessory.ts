@@ -236,6 +236,7 @@ export class InfinityEvolutionPlatformAccessory {
 
     // Filter Control
     new FilterService(
+      this.platform.api,
       system,
       this.accessory.context,
     ).wrap(this.service);
