@@ -19,7 +19,6 @@
       },
       "holdBehavior": {
         "title": "Hold Behavior",
-        "description": "How long temperature setpoint changes made via homekit persist. If you use activity schedules, this will make sure those eventually resume.",
         "type": "string",
         "default": "forever",
         "oneOf": [
@@ -31,11 +30,13 @@
         "required": true
       },
       "holdArgument": {
-        "title": "Hold Argument X",
-        "description": "Only for 'For X Hours' or 'Until Time X'.",
+        "title": "Hold Argument",
         "type": "string",
         "placeholder": "HH:MM",
-        "pattern": "^[0-2][0-9]:[0-5][0-9]$"
+        "pattern": "^[0-2][0-9]:[0-5][0-9]$",
+        "condition": {
+          "functionBody": "return model.holdBehavior.endsWith('_x');"
+      }
       },
       "showOutdoorTemperatureSensor": {
         "title": "Show Outdoor Temperature Sensors",
@@ -50,5 +51,51 @@
         "required": true
       }
     }
-  }
+  },
+  "layout": [
+    {
+      "type": "fieldset",
+      "title": "Account Login",
+      "items": [
+        {
+          "type": "help",
+          "helpvalue": "<h5>Credentials</h5><em class='primary-text'>Enter the credentials for your Infinity Touch / Evolution Connex / Ion Comfort account that is linked to your thermostat.</em>"
+        },
+        "username",
+        "password",
+        {
+          "type": "help",
+          "helpvalue": "<h5>Don't have an account?</h5>If you have not already done so, you need to create an account and link it to your thermostat. You can create an account at these links: </em><ul><li><a href='https://www.myinfinitytouch.carrier.com/Account/Register'>Carrier Infinity</a></li><li><a href='https://www.myevolutionconnex.bryant.com/Account/Register'>Bryant Evolution</a></li><li><a href='https://www.ioncomfort.com/Account/Register'>ICP Brands Ion</a> (including Airquest, Arcoaire, Comfortmaker, Day&Night, Heil, Keeprite, Tempstar)</li></ul>"
+        }
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Thermostats",
+      "items": [
+        {
+          "type": "help",
+          "helpvalue": "<h5>Controls</h5><em class='primary-text'>Temperature and mode controls for your thermostats are always shown. You can choose to show addtional controls. <a href='https://github.com/grivkees/homebridge-carrier-infinity/wiki/Configuration#controls'>More details</a>.</em>"
+        },
+        "showFanControl",
+        {
+          "type": "help",
+          "helpvalue": "<h5>Hold Behavior</h5><em class='primary-text'>Control how changes made via HomeKit interact with the activity schedules of your thermostat. <a href='https://github.com/grivkees/homebridge-carrier-infinity/wiki/Configuration#hold-behavior'>More details</a>.</em>"
+        },
+        "holdBehavior",
+        "holdArgument"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Sensors",
+      "items": [
+        {
+          "type": "help",
+          "helpvalue": "<em class='primary-text'>Show additional environmental sensors in HomeKit.</em>"
+        },
+        "showOutdoorTemperatureSensor"
+      ]
+    }
+  ]
 }
