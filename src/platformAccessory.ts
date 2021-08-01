@@ -10,9 +10,9 @@ import {
   InfinityEvolutionSystemProfile,
   SYSTEM_MODE,
 } from './infinityApi';
-import { FilterService } from './filterService';
+import { FilterService } from './characteristics_filter';
 import { CharTempsAreClose } from './helpers';
-import { ThermostatRHService } from './humidifierService';
+import { ThermostatRHService } from './characteristics_humidity';
 
 export class InfinityEvolutionPlatformAccessory {
   private service: Service;

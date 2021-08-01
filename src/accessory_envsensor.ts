@@ -1,7 +1,7 @@
 import { PlatformAccessory } from 'homebridge';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { AccessoryInformation } from './base';
-import { ThermostatRHService } from './humidifierService';
+import { ThermostatRHService } from './characteristics_humidity';
 
 export class EnvSensorAccessory {
   constructor(
