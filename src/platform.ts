@@ -2,13 +2,13 @@ import { API, Categories, DynamicPlatformPlugin, Logger, PlatformAccessory, Plat
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { InfinityEvolutionPlatformAccessory } from './platformAccessory';
-import { OutdoorTemperatureAccessory } from './oatAccessory';
+import { OutdoorTemperatureAccessory } from './accessory_oat';
 import {
   InfinityEvolutionApiConnection,
   InfinityEvolutionLocations,
   InfinityEvolutionSystemModel,
 } from './infinityApi';
-import { EnvSensorAccessory } from './envsensorAccessory';
+import { EnvSensorAccessory } from './accessory_envsensor';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
