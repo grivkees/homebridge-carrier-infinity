@@ -11,9 +11,16 @@ import {
   SYSTEM_MODE,
 } from './infinityApi';
 import { FilterService } from './characteristics_filter';
-import { areCharTempsClose, convertCharTemp2SystemTemp, convertSystemTemp2CharTemp } from './helpers';
+import {
+  areCharTempsClose,
+  convertCharFan2SystemFan,
+  convertCharTemp2SystemTemp,
+  convertSystemFan2CharFan,
+  convertSystemTemp2CharTemp,
+} from './helpers';
 import { ThermostatRHService } from './characteristics_humidity';
 import { FanService } from './characteristics_fan';
+import { ACService } from './characteristics_ac';
 
 export class InfinityEvolutionPlatformAccessory {
   private service: Service;
@@ -62,22 +69,11 @@ export class InfinityEvolutionPlatformAccessory {
     });
         
     // Create handlers
-    this.service.getCharacteristic(this.platform.Characteristic.CurrentHeatingCoolingState)
-      .onGet(async () => {
-        const current_state = await this.system_status.getMode();
-        switch(current_state) {
-          case SYSTEM_MODE.OFF:
-          case SYSTEM_MODE.FAN_ONLY:
-            return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
-          case SYSTEM_MODE.COOL:
-            return this.platform.Characteristic.CurrentHeatingCoolingState.COOL;
-          case SYSTEM_MODE.HEAT:
-            return this.platform.Characteristic.CurrentHeatingCoolingState.HEAT;
-          default:
-            this.platform.log.error(`Unknown current state '${current_state}'. Defaulting to off.`);
-            return this.platform.Characteristic.CurrentHeatingCoolingState.OFF;
-        }
-      });
+    new ACService(
+      this.platform.api,
+      system,
+      this.accessory.context,
+    ).wrap(this.service);
 
     this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
       .onGet(async () => {
@@ -131,11 +127,6 @@ export class InfinityEvolutionPlatformAccessory {
           this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT :
           this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
       });    
-
-    this.service.getCharacteristic(this.platform.Characteristic.CurrentTemperature)
-      .onGet(async () => {
-        return await this.convertSystemTemp2CharTemp(await this.system_status.getZoneTemp(this.accessory.context.zone)); 
-      });
     
     this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .onGet(async () => {
@@ -260,41 +251,7 @@ export class InfinityEvolutionPlatformAccessory {
       this.platform.api,
       this.platform.systems[this.accessory.context.serialNumber],
       this.accessory.context,
-    ).wrap(this.service);
-
-    this.fan_service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
-      .setProps({minValue: 0, maxValue: 3, minStep: 1})
-      .onGet(async () => {
-        return this.convertSystemFan2CharFan(
-          await this.system_config.getZoneActivityFan(this.accessory.context.zone, await this.getZoneActvity(this.accessory.context.zone)),
-        );
-      })
-      .onSet(async (value) => {
-        // Make sure system mode is right for manual fan settings
-        if (
-          await this.system_config.getMode() === SYSTEM_MODE.OFF &&
-        this.convertCharFan2SystemFan(value) !== FAN_MODE.OFF
-        ) {
-          await this.system_config.setMode(SYSTEM_MODE.FAN_ONLY);
-        } else if (
-          await this.system_config.getMode() === SYSTEM_MODE.FAN_ONLY &&
-        this.convertCharFan2SystemFan(value) === FAN_MODE.OFF
-        ) {
-          await this.system_config.setMode(SYSTEM_MODE.OFF);
-        }
-        // Set zone activity
-        return await this.system_config.setZoneActivity(
-          this.accessory.context.zone,
-          await this.convertCharTemp2SystemTemp(
-            this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value,
-          ),
-          await this.convertCharTemp2SystemTemp(
-            this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value,
-          ),
-          await this.getHoldTime(),
-          this.convertCharFan2SystemFan(value),
-        );
-      });
+    ).wrap(this.fan_service);
   }
 
   async getZoneActvity(zone: string): Promise<string> {
@@ -340,28 +297,10 @@ export class InfinityEvolutionPlatformAccessory {
   }
 
   convertSystemFan2CharFan(fan: string): CharacteristicValue {
-    switch(fan) {
-      case FAN_MODE.LOW:
-        return 1;
-      case FAN_MODE.MED:
-        return 2;
-      case FAN_MODE.HIGH:
-        return 3;
-      default:
-        return 0;
-    }
+    return convertSystemFan2CharFan(fan);
   }
 
   convertCharFan2SystemFan(fan: CharacteristicValue): string {
-    switch (fan) {
-      case 1:
-        return FAN_MODE.LOW;
-      case 2:
-        return FAN_MODE.MED;
-      case 3:
-        return FAN_MODE.HIGH;
-      default:
-        return FAN_MODE.OFF;
-    }
+    return convertCharFan2SystemFan(fan);
   }
 }

@@ -63,6 +63,8 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     }
     accessory.context.serialNumber = system.serialNumber;
     accessory.context.zone = zone;
+    accessory.context.holdBehavior = this.config['holdBehavior'];
+    accessory.context.holdArgument = this.config['holdArgument'];
     new InfinityEvolutionPlatformAccessory(this, accessory);
     if (is_new) {
       this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
