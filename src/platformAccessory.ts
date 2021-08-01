@@ -11,7 +11,7 @@ import {
   SYSTEM_MODE,
 } from './infinityApi';
 import { FilterService } from './characteristics_filter';
-import { CharTempsAreClose } from './helpers';
+import { areCharTempsClose, convertCharTemp2SystemTemp, convertSystemTemp2CharTemp } from './helpers';
 import { ThermostatRHService } from './characteristics_humidity';
 import { FanService } from './characteristics_fan';
 
@@ -158,7 +158,7 @@ export class InfinityEvolutionPlatformAccessory {
         }
       })
       .onSet(async (value) => {
-        if (CharTempsAreClose(value, this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).value)) {
+        if (areCharTempsClose(value, this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).value)) {
           return;
         }
         const svalue = await this.convertCharTemp2SystemTemp(value);
@@ -187,7 +187,7 @@ export class InfinityEvolutionPlatformAccessory {
         );
       })
       .onSet(async (value) => {
-        if (CharTempsAreClose(value, this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value)) {
+        if (areCharTempsClose(value, this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).value)) {
           return;
         }
         return await this.system_config.setZoneActivity(
@@ -210,7 +210,7 @@ export class InfinityEvolutionPlatformAccessory {
         );
       })
       .onSet(async (value) => {
-        if (CharTempsAreClose(value, this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value)) {
+        if (areCharTempsClose(value, this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).value)) {
           return;
         }
         return await this.system_config.setZoneActivity(
@@ -329,23 +329,14 @@ export class InfinityEvolutionPlatformAccessory {
   }
 
   async convertSystemTemp2CharTemp(temp: number): Promise<CharacteristicValue> {
-    if (await this.system_config.getUnits() === 'F') {
-      return 5.0 / 9.0 * (temp - 32);
-    } else {
-      return temp;
-    }
+    return convertSystemTemp2CharTemp(temp, await this.system_config.getUnits());
   }
 
   async convertCharTemp2SystemTemp(temp: CharacteristicValue | null): Promise<number | null> {
     if (temp === null) {
       return temp;
     }
-    temp = Number(temp);
-    if (await this.system_config.getUnits() === 'F') {
-      return (9.0 / 5.0 * temp) + 32;
-    } else {
-      return temp;
-    }
+    return convertCharTemp2SystemTemp(temp, await this.system_config.getUnits());
   }
 
   convertSystemFan2CharFan(fan: string): CharacteristicValue {
