@@ -13,6 +13,7 @@ import {
 import { FilterService } from './characteristics_filter';
 import { CharTempsAreClose } from './helpers';
 import { ThermostatRHService } from './characteristics_humidity';
+import { FanService } from './characteristics_fan';
 
 export class InfinityEvolutionPlatformAccessory {
   private service: Service;
@@ -255,15 +256,11 @@ export class InfinityEvolutionPlatformAccessory {
       );
     });
 
-    this.fan_service.getCharacteristic(this.platform.Characteristic.Active)
-      .onGet(async () => {
-        return await this.system_config.getZoneActivityFan(
-          this.accessory.context.zone,
-          await this.getZoneActvity(this.accessory.context.zone),
-        ) === FAN_MODE.OFF ?
-          this.platform.Characteristic.Active.INACTIVE :
-          this.platform.Characteristic.Active.ACTIVE;
-      });
+    new FanService(
+      this.platform.api,
+      this.platform.systems[this.accessory.context.serialNumber],
+      this.accessory.context,
+    ).wrap(this.service);
 
     this.fan_service.getCharacteristic(this.platform.Characteristic.RotationSpeed)
       .setProps({minValue: 0, maxValue: 3, minStep: 1})

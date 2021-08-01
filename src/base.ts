@@ -1,4 +1,4 @@
-import { InfinityEvolutionSystemModel } from './infinityApi';
+import { ACTIVITY, InfinityEvolutionSystemModel } from './infinityApi';
 import { API, Service, Characteristic } from 'homebridge';
 import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
 
@@ -49,6 +49,15 @@ export abstract class CharacteristicWrapper extends Wrapper {
     if (this.set) {
       characteristic.onSet(this.set.bind(this));
     }
+  }
+
+  async getZoneActvity(zone: string): Promise<string> {
+    // Vacation scheduling is weird, and changes infrequently. Just get it from status.
+    if (await this.system.status.getZoneActivity(zone) === ACTIVITY.VACATION) {
+      return ACTIVITY.VACATION;
+    }
+    // Config has more up to date activity settings.
+    return await this.system.config.getZoneActivity(zone);
   }
 }
 
