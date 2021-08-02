@@ -81,15 +81,19 @@
       "items": [
         {
           "type": "help",
-          "helpvalue": "<h5>Controls</h5><em class='primary-text'>Temperature and mode controls for your thermostats are always shown. You can choose to show addtional controls. <a href='https://github.com/grivkees/homebridge-carrier-infinity/wiki/Configuration#controls'>More details</a>.</em>"
-        },
-        "showFanControl",
-        {
-          "type": "help",
           "helpvalue": "<h5>Hold Behavior</h5><em class='primary-text'>Control how changes made via HomeKit interact with the activity schedules of your thermostat. <a href='https://github.com/grivkees/homebridge-carrier-infinity/wiki/Configuration#hold-behavior'>More details</a>.</em>"
         },
         "holdBehavior",
-        "holdArgument"
+        "holdArgument",
+        {
+          "type": "help",
+          "helpvalue": "<h5>Temperature Control</h5><em class='primary-text'>Temperature and mode controls for your thermostats are always shown.</em>"
+        },
+        {
+          "type": "help",
+          "helpvalue": "<h5>Fan Control</h5><em class='primary-text'>The Fan control is a slider with the following steps: <ol start=0><li>Auto (0%)</li><li>Always On Low (33%)</li><li>Always On Medium (66%)</li><li>Always On High (100%)</li></ol><a href='https://github.com/grivkees/homebridge-carrier-infinity/wiki/Configuration#fan-control'>More details</a>.</em>"
+        },
+        "showFanControl"
       ]
     },
     {
