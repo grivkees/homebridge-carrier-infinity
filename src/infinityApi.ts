@@ -495,21 +495,31 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     fan: string | null = null,
   ): Promise<void> {
     await this.forceFetch();
-    // Set to manual activity
     const zone_obj = await this.getZone(zone);
+    // When moving to manual activity, default to prev activity settings.
+    const manual_activity_obj = await this.getZoneActivityConfig(zone, ACTIVITY.MANUAL);
+    if (zone_obj['holdActivity']![0] !== ACTIVITY.MANUAL) {
+      const prev_activity_obj = await this.getZoneActivityConfig(
+        zone,
+        await this.getZoneActivity(zone),
+      );
+      manual_activity_obj['clsp'][0] = prev_activity_obj['clsp'][0];
+      manual_activity_obj['htsp'][0] = prev_activity_obj['htsp'][0];
+      manual_activity_obj['fan'][0] = prev_activity_obj['fan'][0];
+    }
+    // Set to manual activity
     zone_obj['holdActivity']![0] = ACTIVITY.MANUAL;
     zone_obj['hold'][0] = 'on';
     zone_obj['otmr'][0] = hold_until || '';
     // Set setpoints on manual activity
-    const activity_obj = await this.getZoneActivityConfig(zone, ACTIVITY.MANUAL);
     if (clsp) {
-      activity_obj['clsp'][0] = await this.roundSetpoint(clsp);
+      manual_activity_obj['clsp'][0] = await this.roundSetpoint(clsp);
     }
     if (htsp) {
-      activity_obj['htsp'][0] = await this.roundSetpoint(htsp);
+      manual_activity_obj['htsp'][0] = await this.roundSetpoint(htsp);
     }
     if (fan) {
-      activity_obj['fan'][0] = fan;
+      manual_activity_obj['fan'][0] = fan;
     }
     await this.push();
   }
