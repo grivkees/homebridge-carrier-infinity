@@ -43,6 +43,13 @@ interface BaseElement {
   '$': {id: string};
 }
 
+interface HumidityActivity extends BaseElement {
+  rhtg: string[];
+  rclg: string[];
+  rclgovercool: string[];
+  humidifier: string[];
+}
+
 interface ZoneActivity extends BaseElement {
   clsp: string[];
   htsp: string[];
@@ -375,6 +382,17 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     }
   }
 
+  async getHumidifier(): Promise<string> {
+    await this.fetch();
+    return this.data_object.status.humid[0];
+  }
+
+  async getDehumidifier(): Promise<string> {
+    await this.fetch();
+    // TODO: include cool also in dehumidifier being on?
+    return this.data_object.status.mode[0] === 'dehumidify' ? STATUS.ON : STATUS.OFF;
+  }
+
   private async getZone(zone: string): Promise<Zone> {
     await this.fetch();
     return this.data_object.status.zones[0].zone.find(
@@ -498,6 +516,46 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
       ).reverse();
       return yesterday_schedule[0].activity[0];
     }
+  }
+
+  private async getActivityHumidityConfig(activity_name: string): Promise<HumidityActivity> {
+    await this.fetch();
+    switch(activity_name) {
+      case ACTIVITY.VACATION:
+        return this.data_object.config.humidityVacation[0];
+      case ACTIVITY.AWAY:
+        return this.data_object.config.humidityAway[0];
+      case ACTIVITY.HOME:
+      case ACTIVITY.SLEEP:
+      case ACTIVITY.WAKE:
+      case ACTIVITY.MANUAL:
+        return this.data_object.config.humidityHome[0];
+      default:
+        this.api_connection.log.error(
+          `Unknown activity '${activity_name}'. Report bug: https://bit.ly/3igbU7D`,
+        );
+        return this.data_object.config.humidityHome[0];
+    }
+  }
+
+  async getActivityHumidifierState(activity_name: string): Promise<string> {
+    const activity_obj = await this.getActivityHumidityConfig(activity_name);
+    return activity_obj.humidifier[0];
+  }
+
+  async getActivityHumidifierTarget(activity_name: string): Promise<number> {
+    const activity_obj = await this.getActivityHumidityConfig(activity_name);
+    return Number(activity_obj.rhtg[0]);
+  }
+
+  async getActivityDehumidifierState(activity_name: string): Promise<string> {
+    const activity_obj = await this.getActivityHumidityConfig(activity_name);
+    return activity_obj.rclgovercool[0];
+  }
+
+  async getActivityDehumidifierTarget(activity_name: string): Promise<number> {
+    const activity_obj = await this.getActivityHumidityConfig(activity_name);
+    return Number(activity_obj.rclg[0]);
   }
 
   private async getZoneActivityConfig(zone: string, activity_name: string): Promise<ZoneActivity> {

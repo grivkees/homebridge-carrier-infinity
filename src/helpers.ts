@@ -71,3 +71,19 @@ export function processSetpointDeadband(
   }
   return [htsp, clsp];
 }
+
+export function convertSystemHum2CharHum(level: number): CharacteristicValue {
+  return level * 5;
+}
+
+export function convertCharHum2SystemHum(level: CharacteristicValue): number {
+  return Math.round(Number(level) / 5);
+}
+
+export function convertSystemDehum2CharDehum(level: number): CharacteristicValue {
+  return level * 2 + 44;
+}
+
+export function convertCharDehum2SystemDehum(level: CharacteristicValue): number {
+  return Math.round((Number(level) - 44) / 2);
+}

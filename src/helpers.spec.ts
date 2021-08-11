@@ -1,5 +1,9 @@
 import {
+  convertCharDehum2SystemDehum,
+  convertCharHum2SystemHum,
   convertCharTemp2SystemTemp,
+  convertSystemDehum2CharDehum,
+  convertSystemHum2CharHum,
   processSetpointDeadband,
 } from './helpers';
 
@@ -43,5 +47,45 @@ describe('processSetpointDeadband', () => {
   test('heat above cool', () => {
     expect(processSetpointDeadband(72, 70, 'F', true)).toEqual([68, 70]);
     expect(processSetpointDeadband(72, 70, 'F', false)).toEqual([72, 74]);
+  });
+});
+
+describe('humidity helpers', () => {
+  test('convertSystemHum2CharHum', () => {
+    expect(convertSystemHum2CharHum(1)).toEqual(5);
+    expect(convertSystemHum2CharHum(5)).toEqual(25);
+    expect(convertSystemHum2CharHum(8)).toEqual(40);
+  });
+
+  test('convertCharHum2SystemHum', () => {
+    expect(convertCharHum2SystemHum(40)).toEqual(8);
+    expect(convertCharHum2SystemHum(10)).toEqual(2);
+  });
+
+  test('there and back again', () => {
+    expect(convertCharHum2SystemHum(convertSystemHum2CharHum(1))).toEqual(1);
+    expect(convertCharHum2SystemHum(convertSystemHum2CharHum(8))).toEqual(8);
+    expect(convertSystemHum2CharHum(convertCharHum2SystemHum(50))).toEqual(50);
+    expect(convertSystemHum2CharHum(convertCharHum2SystemHum(60))).toEqual(60);
+  });
+});
+
+describe('dehumidity helpers', () => {
+  test('convertSystemDehum2CharDehum', () => {
+    expect(convertSystemDehum2CharDehum(1)).toEqual(46);
+    expect(convertSystemDehum2CharDehum(5)).toEqual(54);
+    expect(convertSystemDehum2CharDehum(8)).toEqual(60);
+  });
+
+  test('convertCharHum2SystemHum', () => {
+    expect(convertCharDehum2SystemDehum(60)).toEqual(8);
+    expect(convertCharDehum2SystemDehum(80)).toEqual(18);
+  });
+
+  test('there and back again', () => {
+    expect(convertCharDehum2SystemDehum(convertSystemDehum2CharDehum(1))).toEqual(1);
+    expect(convertCharDehum2SystemDehum(convertSystemDehum2CharDehum(8))).toEqual(8);
+    expect(convertSystemDehum2CharDehum(convertCharDehum2SystemDehum(50))).toEqual(50);
+    expect(convertSystemDehum2CharDehum(convertCharDehum2SystemDehum(60))).toEqual(60);
   });
 });

@@ -11,7 +11,7 @@ import { FilterService } from './characteristics_filter';
 import {
   convertSystemTemp2CharTemp,
 } from './helpers';
-import { ThermostatRHService } from './characteristics_humidity';
+import { ThermostatRHService, HumidifierService } from './characteristics_humidity';
 import { FanService } from './characteristics_fan';
 import { ACService } from './characteristics_ac';
 import { BaseAccessory } from './accessory_base';
@@ -19,6 +19,7 @@ import { BaseAccessory } from './accessory_base';
 export class ThermostatAccessory extends BaseAccessory {
   private service: Service;
   private fan_service?: Service;
+  private hum_service?: Service;
   private system_status: InfinityEvolutionSystemStatus;
   private system_config: InfinityEvolutionSystemConfig;
   private system_profile: InfinityEvolutionSystemProfile;
@@ -84,11 +85,14 @@ export class ThermostatAccessory extends BaseAccessory {
       this.accessory.context,
     ).wrap(this.service);
 
-    // Humidity Control
+    // Humidity Sensor
     new ThermostatRHService(
       this.platform,
       this.accessory.context,
     ).wrap(this.service);
+    // Humidifier/Dehumidifier Control
+    this.hum_service = this.accessory.getService(this.platform.Service.HumidifierDehumidifier);
+    this.setupHumidifierService();
   }
 
   setupFanService(): void {
@@ -105,5 +109,21 @@ export class ThermostatAccessory extends BaseAccessory {
       this.platform,
       this.accessory.context,
     ).wrap(this.fan_service);
+  }
+
+  setupHumidifierService(): void {
+    this.hum_service = this.hum_service || this.accessory.addService(this.platform.Service.HumidifierDehumidifier);
+
+    this.system_config.fetch().then(async () => {
+      this.hum_service?.setCharacteristic(
+        this.platform.Characteristic.Name,
+        await this.system_config.getZoneName(this.accessory.context.zone) + ' Humidifier',
+      );
+    });
+
+    new HumidifierService(
+      this.platform,
+      this.accessory.context,
+    ).wrap(this.hum_service);
   }
 }
