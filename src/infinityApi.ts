@@ -63,6 +63,7 @@ interface Zone {
   holdActivity?: string[];
   activities?: ZoneActivity[];
   program?: ZoneProgram[];
+  zoneconditioning?: string[];
 }
 
 class OAuthHeaders {
@@ -330,6 +331,18 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
   private async getZone(zone: string): Promise<Zone> {
     await this.fetch();
     return this.data_object.status.zones[0].zone[zone];
+  }
+
+  async getZoneConditioning(zone: string): Promise<string> {
+    const raw_mode = (await this.getZone(zone)).zoneconditioning![0];
+    switch(raw_mode) {
+      case 'active_heat':
+        return SYSTEM_MODE.HEAT;
+      case 'active_cool':
+        return SYSTEM_MODE.COOL;
+      default:
+        return SYSTEM_MODE.OFF;
+    }
   }
 
   async getZoneFan(zone: string): Promise<string> {

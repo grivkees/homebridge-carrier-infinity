@@ -5,7 +5,7 @@ import { SYSTEM_MODE } from './infinityApi';
 class CurrentACStatus extends ThermostatCharacteristicWrapper {
   ctype = this.Characteristic.CurrentHeatingCoolingState;
   get = async () => {
-    const current_state = await this.system.status.getMode();
+    const current_state = await this.system.status.getZoneConditioning(this.context.zone);
     switch(current_state) {
       case SYSTEM_MODE.OFF:
       case SYSTEM_MODE.FAN_ONLY:
