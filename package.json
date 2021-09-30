@@ -43,11 +43,11 @@
     "typescript-memoize": "^1.0.1"
   },
   "devDependencies": {
-    "@commitlint/cli": "^12.1.4",
-    "@commitlint/config-conventional": "^12.1.4",
-    "@commitlint/cz-commitlint": "^12.1.4",
+    "@commitlint/cli": "^13.2.0",
+    "@commitlint/config-conventional": "^13.2.0",
+    "@commitlint/cz-commitlint": "^13.2.0",
     "@semantic-release/git": "^9.0.0",
-    "@types/jest": "^26.0.23",
+    "@types/jest": "^27.0.2",
     "@types/node": "^16.4.3",
     "@types/xml2js": "^0.4.8",
     "@typescript-eslint/eslint-plugin": "^4.6.1",
