@@ -156,14 +156,22 @@ export class InfinityEvolutionApiConnection {
       );
 
       if (response.data.error) {
-        this.log.error('Failed to login: ', response.data.error.message);
+        throw new Error('API returned error on status 2xx: ' + JSON.stringify(response.data));
       } else if (response.data.result) {
         this.token = response.data.result.accessToken;
       } else {
-        this.log.error('Could not find refreshed api access token.');
+        throw new Error('Could not find refreshed api access token: ' + JSON.stringify(response.data));
       }
     } catch (error) {
-      this.log.error('Could not refresh api access token: ', error.message);
+      if (Axios.isAxiosError(error)) {
+        this.log.error(
+          'Could not refresh api access token: ', error.message,
+          '\nStatus: ', error.response?.status,
+          '\nData: ', error.response?.data,
+        );
+      } else {
+        this.log.error('Could not refresh api access token: ', error);
+      }
     }
   }
 }
@@ -193,7 +201,11 @@ abstract class BaseInfinityEvolutionApiModel {
       const response = await this.api_connection.axios.get(this.getPath());
       this.data_object = await xml2js.parseStringPromise(response.data);
     } catch (error) {
-      this.api_connection.log.error('Failed to fetch updates: ', error.message);
+      if (Axios.isAxiosError(error)) {
+        this.api_connection.log.error('Failed to fetch updates (axios): ', error.message);
+      } else {
+        this.api_connection.log.error('Failed to fetch updates (unknown): ', error);
+      }
     }
   }
 
@@ -218,7 +230,11 @@ abstract class BaseInfinityEvolutionApiModel {
         },
       );
     } catch (error) {
-      this.api_connection.log.error('Failed to push updates: ', error.message);
+      if (Axios.isAxiosError(error)) {
+        this.api_connection.log.error('Failed to push updates (axios): ', error.message);
+      } else {
+        this.api_connection.log.error('Failed to push updates (unknown): ', error);
+      }
     }
     await this.forceFetch();
   }

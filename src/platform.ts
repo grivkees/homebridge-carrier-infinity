@@ -31,13 +31,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     }
 
     this.api_connection = new InfinityEvolutionApiConnection(config['username'], config['password'], this.log);
-    this.api_connection.refreshToken()
-      .then(() => {
-        this.log.info('Login success!');
-      })
-      .catch(error => {
-        this.log.error('Login error: ', error.message);
-      });
+    this.api_connection.refreshToken().then();
 
     this.api.on('didFinishLaunching', () => {
       this.discoverDevices().then().catch(error => {
