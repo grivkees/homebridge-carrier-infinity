@@ -8,7 +8,7 @@ class OATSensorTemp extends CharacteristicWrapper {
   get = async () => {
     return convertSystemTemp2CharTemp(
       await this.system.status.getOutdoorTemp(),
-      await this.system.status.getUnits(),
+      'F', // The oat from the api is always in F (#97)
     );
   };
 }
