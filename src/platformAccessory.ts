@@ -1,20 +1,14 @@
-import { Service, PlatformAccessory, CharacteristicValue } from 'homebridge';
+import { Service, PlatformAccessory } from 'homebridge';
 
 import { CarrierInfinityHomebridgePlatform } from './platform';
 
 import {
-  ACTIVITY,
   InfinityEvolutionSystemStatus,
   InfinityEvolutionSystemConfig,
   InfinityEvolutionSystemProfile,
-  SYSTEM_MODE,
 } from './infinityApi';
 import { FilterService } from './characteristics_filter';
 import {
-  areCharTempsClose,
-  convertCharFan2SystemFan,
-  convertCharTemp2SystemTemp,
-  convertSystemFan2CharFan,
   convertSystemTemp2CharTemp,
 } from './helpers';
 import { ThermostatRHService } from './characteristics_humidity';
@@ -49,8 +43,8 @@ export class InfinityEvolutionPlatformAccessory {
       this.service.setCharacteristic(this.platform.Characteristic.Name, await this.system_config.getZoneName(this.accessory.context.zone));
       const temp_bounds = await this.system_config.getTempBounds();
       const bound_props = {
-        minValue: Number(await this.convertSystemTemp2CharTemp(temp_bounds[0])),
-        maxValue: Number(await this.convertSystemTemp2CharTemp(temp_bounds[1])),
+        minValue: Number(convertSystemTemp2CharTemp(temp_bounds[0], await this.system_config.getUnits())),
+        maxValue: Number(convertSystemTemp2CharTemp(temp_bounds[1], await this.system_config.getUnits())),
       };
       this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps(bound_props);
       this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).setProps(bound_props);
@@ -108,55 +102,5 @@ export class InfinityEvolutionPlatformAccessory {
       this.platform,
       this.accessory.context,
     ).wrap(this.fan_service);
-  }
-
-  async getZoneActivity(zone: string): Promise<string> {
-    // Vacation scheduling is weird, and changes infrequently. Just get it from status.
-    if (await this.system_status.getZoneActivity(zone) === ACTIVITY.VACATION) {
-      return ACTIVITY.VACATION;
-    }
-    // Config has more up to date activity settings.
-    return await this.system_config.getZoneActivity(zone);
-  }
-
-  async getHoldTime(): Promise<string> {
-    switch (this.platform.config['holdBehavior']) {
-      case 'activity':
-        return await this.system_config.getZoneNextActivityTime(this.accessory.context.zone);
-      case 'for_x': {
-        const arg = this.platform.config['holdArgument'].split(':');
-        let target_ms = (new Date()).getTime();
-        target_ms += Number(arg[0]) * 60 * 60 * 1000;
-        target_ms += Number(arg[1]) * 60 * 1000;
-        const target_date = new Date(target_ms);
-        return `${target_date.getHours()}:${target_date.getMinutes()}`.padStart(5, '0');
-      }
-      case 'until_x':
-        return this.platform.config['holdArgument'];
-      case 'forever':
-        return '';
-      default:
-        this.platform.log.error('Invalid hold behavior setting. Defaulting to forever.');
-        return '';
-    }
-  }
-
-  async convertSystemTemp2CharTemp(temp: number): Promise<CharacteristicValue> {
-    return convertSystemTemp2CharTemp(temp, await this.system_config.getUnits());
-  }
-
-  async convertCharTemp2SystemTemp(temp: CharacteristicValue | null): Promise<number | null> {
-    if (temp === null) {
-      return temp;
-    }
-    return convertCharTemp2SystemTemp(temp, await this.system_config.getUnits());
-  }
-
-  convertSystemFan2CharFan(fan: string): CharacteristicValue {
-    return convertSystemFan2CharFan(fan);
-  }
-
-  convertCharFan2SystemFan(fan: CharacteristicValue): string {
-    return convertCharFan2SystemFan(fan);
   }
 }
