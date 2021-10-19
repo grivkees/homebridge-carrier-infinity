@@ -4,7 +4,6 @@ import { CarrierInfinityHomebridgePlatform } from './platform';
 
 import {
   ACTIVITY,
-  FAN_MODE,
   InfinityEvolutionSystemStatus,
   InfinityEvolutionSystemConfig,
   InfinityEvolutionSystemProfile,
@@ -73,60 +72,7 @@ export class InfinityEvolutionPlatformAccessory {
       this.platform,
       this.accessory.context,
     ).wrap(this.service);
-
-    this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState)
-      .onGet(async () => {
-        const target_state = await this.system_config.getMode();
-        switch(target_state) {
-          case SYSTEM_MODE.OFF:
-          case SYSTEM_MODE.FAN_ONLY:
-            return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
-          case SYSTEM_MODE.COOL:
-            return this.platform.Characteristic.TargetHeatingCoolingState.COOL;
-          case SYSTEM_MODE.HEAT:
-            return this.platform.Characteristic.TargetHeatingCoolingState.HEAT;
-          case SYSTEM_MODE.AUTO:
-            return this.platform.Characteristic.TargetHeatingCoolingState.AUTO;
-          default:
-            this.platform.log.error(`Unknown target state '${target_state}'. Defaulting to off.`);
-            return this.platform.Characteristic.TargetHeatingCoolingState.OFF;
-        }
-      })
-      .onSet(async (value) => {
-        if (value === this.service.getCharacteristic(this.platform.Characteristic.TargetHeatingCoolingState).value) {
-          return;
-        }
-        switch(value) {
-          case this.platform.Characteristic.TargetHeatingCoolingState.OFF: {
-            // If manual fan is set, go to fan only mode
-            if (await this.system_config.getZoneActivityFan(
-              this.accessory.context.zone,
-              await this.getZoneActvity(this.accessory.context.zone),
-            ) !== FAN_MODE.OFF) {
-              return await this.system_config.setMode(SYSTEM_MODE.FAN_ONLY);
-            // If no manual fan, go to full off
-            } else {
-              return await this.system_config.setMode(SYSTEM_MODE.OFF);
-            }
-          }
-          case this.platform.Characteristic.TargetHeatingCoolingState.COOL:
-            return await this.system_config.setMode(SYSTEM_MODE.COOL);
-          case this.platform.Characteristic.TargetHeatingCoolingState.HEAT:
-            return await this.system_config.setMode(SYSTEM_MODE.HEAT);
-          case this.platform.Characteristic.TargetHeatingCoolingState.AUTO:
-            return await this.system_config.setMode(SYSTEM_MODE.AUTO);
-          default:
-            this.platform.log.error(`Don't know how to set target state '${value}'. Making no change.`);
-        }
-      });
-    
-    this.service.getCharacteristic(this.platform.Characteristic.TemperatureDisplayUnits)
-      .onGet(async () => {
-        return await this.system_config.getUnits() === 'F' ?
-          this.platform.Characteristic.TemperatureDisplayUnits.FAHRENHEIT :
-          this.platform.Characteristic.TemperatureDisplayUnits.CELSIUS;
-      });    
-    
+        
     this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .onGet(async () => {
         const cmode = await this.system_config.getMode();
