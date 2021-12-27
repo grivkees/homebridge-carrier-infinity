@@ -45,7 +45,7 @@
   "devDependencies": {
     "@commitlint/cli": "^13.2.0",
     "@commitlint/config-conventional": "^13.2.0",
-    "@commitlint/cz-commitlint": "^13.2.0",
+    "@commitlint/cz-commitlint": "^16.0.0",
     "@semantic-release/git": "^9.0.0",
     "@types/jest": "^27.0.2",
     "@types/node": "^16.4.3",
