@@ -107,6 +107,9 @@ class OAuthHeaders {
   }
 
   static intercept(config: AxiosRequestConfig, username: string, token: string): AxiosRequestConfig {
+    if (config.headers === undefined) {
+      config.headers = {};
+    }
     config.headers.Authorization = this.genHeader(config.method || 'GET', config.url || '/', username, token, config.data);
     return config;
   }
