@@ -43,7 +43,7 @@
     "xml2js": "^0.4.23"
   },
   "devDependencies": {
-    "@commitlint/cli": "^13.2.0",
+    "@commitlint/cli": "^16.2.1",
     "@commitlint/config-conventional": "^13.2.0",
     "@commitlint/cz-commitlint": "^16.2.1",
     "@semantic-release/git": "^10.0.1",
