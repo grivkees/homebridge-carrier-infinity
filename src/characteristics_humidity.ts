@@ -23,9 +23,9 @@ export class ThermostatRHService extends MultiWrapper {
 }
 
 export class HumidifierService extends MultiWrapper {
-    WRAPPERS = [
-      CurrentRH,
-      TargetDehumidify,
-      TargetHumidify,
-    ];
+  WRAPPERS = [
+    CurrentRH,
+    TargetDehumidify,
+    TargetHumidify,
+  ];
 }
