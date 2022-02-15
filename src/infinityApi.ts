@@ -137,11 +137,14 @@ export class InfinityEvolutionApiConnection {
 
   // TODO: on some api errors, force a refresh
   private async forceRefreshToken(): Promise<void> {
-    const loginxml = '<credentials>'
-      + `<username>${this.username}</username>`
-      + `<password>${this.password}</password>`
-      + '</credentials>';
-    const data = `data=${encodeURIComponent(loginxml)}`;
+    const builder = new xml2js.Builder({cdata: true, headless: true});
+    const new_xml = builder.buildObject({
+      credentials: {
+        username: this.username,
+        password: this.password,
+      },
+    });
+    const data = `data=${encodeURIComponent(new_xml)}`;
 
     try {
       const response = await this.axios.post(
