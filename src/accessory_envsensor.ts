@@ -8,10 +8,8 @@ export class EnvSensorAccessory {
     private readonly platform: CarrierInfinityHomebridgePlatform,
     private readonly accessory: PlatformAccessory,
   ) {
-    const system = this.platform.systems[this.accessory.context.serialNumber];
     new ThermostatRHService(
-      this.platform.api,
-      system,
+      this.platform,
       this.accessory.context,
     ).wrap(
       this.accessory.getService(this.platform.Service.HumiditySensor) ||
@@ -19,8 +17,7 @@ export class EnvSensorAccessory {
     );
 
     new AccessoryInformation(
-      this.platform.api,
-      system,
+      this.platform,
       this.accessory.context,
     ).wrap(
       this.accessory.getService(this.platform.Service.AccessoryInformation) ||

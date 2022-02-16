@@ -70,8 +70,7 @@ export class InfinityEvolutionPlatformAccessory {
         
     // Create handlers
     new ACService(
-      this.platform.api,
-      system,
+      this.platform,
       this.accessory.context,
     ).wrap(this.service);
 
@@ -224,15 +223,13 @@ export class InfinityEvolutionPlatformAccessory {
 
     // Filter Control
     new FilterService(
-      this.platform.api,
-      system,
+      this.platform,
       this.accessory.context,
     ).wrap(this.service);
 
     // Humidity Control
     new ThermostatRHService(
-      this.platform.api,
-      system,
+      this.platform,
       this.accessory.context,
     ).wrap(this.service);
   }
@@ -248,8 +245,7 @@ export class InfinityEvolutionPlatformAccessory {
     });
 
     new FanService(
-      this.platform.api,
-      this.platform.systems[this.accessory.context.serialNumber],
+      this.platform,
       this.accessory.context,
     ).wrap(this.fan_service);
   }
