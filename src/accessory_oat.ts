@@ -22,10 +22,8 @@ export class OutdoorTemperatureAccessory {
     private readonly platform: CarrierInfinityHomebridgePlatform,
     private readonly accessory: PlatformAccessory,
   ) {
-    const system = this.platform.systems[this.accessory.context.serialNumber];
     new OutdoorTempSensorService(
-      this.platform.api,
-      system,
+      this.platform,
       this.accessory.context,
     ).wrap(
       this.accessory.getService(this.platform.Service.TemperatureSensor) ||
@@ -33,8 +31,7 @@ export class OutdoorTemperatureAccessory {
     );
   
     new AccessoryInformation(
-      this.platform.api,
-      system,
+      this.platform,
       this.accessory.context,
     ).wrap(
       this.accessory.getService(this.platform.Service.AccessoryInformation) ||

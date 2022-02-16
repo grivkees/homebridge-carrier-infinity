@@ -1,18 +1,21 @@
 import { ACTIVITY, InfinityEvolutionSystemModel } from './infinityApi';
-import { API, Service, Characteristic } from 'homebridge';
+import { Service, Characteristic, Logger } from 'homebridge';
 import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
+
+import { CarrierInfinityHomebridgePlatform } from './platform';
 
 /*
 * Helpers to add handlers to the HAP Service and Characteristic objects.
 */
 
 class Wrapper {
-  public readonly Service: typeof Service = this.api.hap.Service;
-  public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
+  public readonly Service: typeof Service = this.platform.api.hap.Service;
+  public readonly Characteristic: typeof Characteristic = this.platform.api.hap.Characteristic;
+  protected readonly system: InfinityEvolutionSystemModel = this.platform.systems[this.context.serialNumber];
+  protected readonly log: Logger = this.platform.log;
 
   constructor(
-    public readonly api: API,
-    protected readonly system: InfinityEvolutionSystemModel,
+    public readonly platform: CarrierInfinityHomebridgePlatform,
     protected readonly context: UnknownContext,
   ) {}
 
@@ -28,8 +31,7 @@ export abstract class MultiWrapper extends Wrapper {
   wrap(service: Service): void {
     for (const ctype of this.WRAPPERS) {
       new ctype(
-        this.api,
-        this.system,
+        this.platform,
         this.context,
       ).wrap(service);
     }
