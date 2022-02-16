@@ -50,7 +50,16 @@ export abstract class CharacteristicWrapper extends Wrapper {
       characteristic.setProps(this.props);
     }
     if (this.get) {
-      characteristic.onGet(this.get.bind(this));
+      characteristic.onGet(async () => {
+        // schedule characteristic update
+        setImmediate(async () => {
+          if (this.get) {
+            characteristic.updateValue(await this.get());
+          }
+        });
+        // and return immediately
+        return characteristic.value;
+      });
     }
     if (this.set) {
       characteristic.onSet(this.set.bind(this));
