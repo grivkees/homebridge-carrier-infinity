@@ -54,6 +54,7 @@
     "@typescript-eslint/parser": "^5.12.0",
     "commitizen": "^4.2.4",
     "eslint": "^8.9.0",
+    "eslint-plugin-spellcheck": "^0.0.19",
     "homebridge": "^1.2.3",
     "jest": "^27.0.4",
     "nodemon": "^2.0.6",
