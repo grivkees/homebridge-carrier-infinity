@@ -6,6 +6,7 @@ import { MemoizeExpiring } from 'typescript-memoize';
 import { Mutex } from 'async-mutex';
 import * as xml2js from 'xml2js';
 import { Logger } from 'homebridge';
+import hash from 'object-hash';
 
 export const SYSTEM_MODE = {
   OFF: 'off',
@@ -186,6 +187,8 @@ abstract class BaseInfinityEvolutionApiModel {
   // TODO make unknown and handle type checking in get methods
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   protected data_object: any = null;
+  protected data_object_hash?: string;
+  protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
 
   constructor(
@@ -196,9 +199,21 @@ abstract class BaseInfinityEvolutionApiModel {
 
   abstract getPath(): string;
 
+  protected hashDataObject(): string {
+    return hash(
+      this.data_object,
+      {excludeKeys: (key) => {
+        return this.HASH_IGNORE_KEYS.has(key);
+      }},
+    );
+  }
+
   @MemoizeExpiring(10 * 1000)
   async fetch(): Promise<void> {
-    await this.forceFetch();
+    // Don't fetch while writes are happening.
+    await this.write_lock.runExclusive(async () => {
+      await this.forceFetch();
+    });    
   }
 
   protected async forceFetch(): Promise<void> {
@@ -206,6 +221,7 @@ abstract class BaseInfinityEvolutionApiModel {
     try {
       const response = await this.api_connection.axios.get(this.getPath());
       this.data_object = await xml2js.parseStringPromise(response.data);
+      this.data_object_hash = this.hashDataObject();
     } catch (error) {
       if (Axios.isAxiosError(error)) {
         this.api_connection.log.error('Failed to fetch updates (axios): ', error.message);
@@ -213,36 +229,6 @@ abstract class BaseInfinityEvolutionApiModel {
         this.api_connection.log.error('Failed to fetch updates (unknown): ', error);
       }
     }
-  }
-
-  async push(): Promise<void> {
-    await this.write_lock.runExclusive(async () => {
-      await this.pushUnsafe();
-    });
-  }
-
-  private async pushUnsafe(): Promise<void> {
-    const builder = new xml2js.Builder();
-    const new_xml = builder.buildObject(this.data_object);
-    const data = `data=${encodeURIComponent(new_xml)}`;
-    try {
-      await this.api_connection.axios.post(
-        this.getPath(),
-        data,
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-        },
-      );
-    } catch (error) {
-      if (Axios.isAxiosError(error)) {
-        this.api_connection.log.error('Failed to push updates (axios): ', error.message);
-      } else {
-        this.api_connection.log.error('Failed to push updates (unknown): ', error);
-      }
-    }
-    await this.forceFetch();
   }
 }
 
@@ -265,7 +251,8 @@ export class InfinityEvolutionLocations extends BaseInfinityEvolutionApiModel {
 }
 
 abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolutionApiModel {
-  public last_updated = 0;
+  private last_updated = 0;  // TODO use this
+  protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime']);
 
   constructor(
     protected readonly api_connection: InfinityEvolutionApiConnection,
@@ -413,14 +400,6 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     return this.data_object.config.mode[0];
   }
 
-  async setMode(mode: string): Promise<void> {
-    await this.forceFetch();
-    if (mode !== await this.getMode()) {
-      this.data_object.config.mode[0] = mode;
-      await this.push();  
-    }
-  }
-
   private async getZone(zone: string): Promise<Zone> {
     await this.fetch();
     return this.data_object.config.zones[0].zone[zone.toString()];
@@ -521,7 +500,103 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     }
   }
 
-  // TODO: this is unsafe if clsp and htsp are called at the same time, one could undo the other.
+  /* Write APIs */
+  mutations: (() => Promise<void>)[] = [];
+
+  private async push(): Promise<void> {
+    // Wait a bit so we can catch any other mutations that came in around the
+    // same time ...
+    await new Promise(r => setTimeout(r, 2000));
+    // ... and then make sure we aren't already fetching or pushing ...
+    await this.write_lock.runExclusive(async () => {
+      // ... and then only run if we still have mutations to do.
+      if (this.mutations.length > 0) {
+        // 1. Do mutations
+        const mutated_hash = await this.mutate();
+        if (mutated_hash === null) {
+          return;
+        }
+        // 2. Push
+        await this.forcePush();
+        // 3. Confirm
+        await new Promise(r => setTimeout(r, 5000));
+        await this.forceFetch();
+        if (mutated_hash === this.data_object_hash) {
+          this.api_connection.log.info('Changes sent to carrier api successfully.');
+        } else {
+          this.api_connection.log.warn('Changes may not have successfully propagated to the carrier api.');
+        }
+
+      }
+    });
+  }
+
+  private async mutate(): Promise<string | null> {
+    // Refresh config.
+    const old_hash = this.data_object_hash;
+    await this.forceFetch();
+    if (old_hash !== this.data_object_hash) {
+      this.api_connection.log.warn(
+        'Cached config was stale before mutation and push.',
+      );
+    }
+
+    // Do all the config mutations we have stored, and clear the array.
+    // TODO make mutations non-async. these need to happen in order. and async
+    // in a loop is an anti-pattern.
+    for (const m of this.mutations) {
+      await m();
+    }
+    this.mutations = [];
+    const mutated_hash = this.hashDataObject();
+
+    // If nothing actually changed, no need to push.
+    if (old_hash === mutated_hash) {
+      this.api_connection.log.warn(
+        'Config doesn\'t appear to have changed. No changes sent.',
+      );
+      return null;
+    }
+
+    return mutated_hash;
+  }
+
+  private async forcePush(): Promise<void> {
+    this.api_connection.log.info('Pushing changes to carrier api...');
+    const builder = new xml2js.Builder();
+    const new_xml = builder.buildObject(this.data_object);
+    const data = `data=${encodeURIComponent(new_xml)}`;
+    try {
+      await this.api_connection.axios.post(
+        this.getPath(),
+        data,
+        {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        },
+      );
+    } catch (error) {
+      if (Axios.isAxiosError(error)) {
+        this.api_connection.log.error('Failed to push updates (axios): ', error.message);
+      } else {
+        this.api_connection.log.error('Failed to push updates (unknown): ', error);
+      }
+    }
+  }
+
+  async setMode(mode: string): Promise<void> {
+    this.mutations.push(async () => {
+      this.mutateMode(mode);
+    });
+    // Schedule the push event, but don't wait for it to return.
+    this.push();
+  }
+
+  private mutateMode(mode: string): void {
+    this.data_object.config.mode[0] = mode;
+  }
+
   async setZoneActivity(
     zone: string,
     clsp: number | null,
@@ -529,7 +604,20 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     hold_until: string | null,
     fan: string | null = null,
   ): Promise<void> {
-    await this.forceFetch();
+    this.mutations.push(async () => {
+      await this.mutateZoneActivity(zone, clsp, htsp, hold_until, fan);
+    });
+    // Schedule the push event, but don't wait for it to return.
+    this.push();
+  }
+
+  private async mutateZoneActivity(
+    zone: string,
+    clsp: number | null,
+    htsp: number | null,
+    hold_until: string | null,
+    fan: string | null = null,
+  ): Promise<void> {
     const zone_obj = await this.getZone(zone);
     // When moving to manual activity, default to prev activity settings.
     const manual_activity_obj = await this.getZoneActivityConfig(zone, ACTIVITY.MANUAL);
@@ -542,7 +630,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
       manual_activity_obj['htsp'][0] = prev_activity_obj['htsp'][0];
       manual_activity_obj['fan'][0] = prev_activity_obj['fan'][0];
     }
-    // Set to manual activity
+    // Always set to manual activity
     zone_obj['holdActivity']![0] = ACTIVITY.MANUAL;
     zone_obj['hold'][0] = 'on';
     zone_obj['otmr'][0] = hold_until || '';
@@ -556,7 +644,6 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     if (fan) {
       manual_activity_obj['fan'][0] = fan;
     }
-    await this.push();
   }
 }
 
