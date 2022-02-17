@@ -76,7 +76,7 @@ export class InfinityEvolutionPlatformAccessory {
     this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature)
       .onGet(async () => {
         const cmode = await this.system_config.getMode();
-        const activity = await this.getZoneActvity(this.accessory.context.zone);
+        const activity = await this.getZoneActivity(this.accessory.context.zone);
         switch (cmode) {
           case SYSTEM_MODE.COOL:
             return await this.convertSystemTemp2CharTemp(await this.system_config.getZoneActivityCoolSetpoint(
@@ -118,7 +118,7 @@ export class InfinityEvolutionPlatformAccessory {
         return this.convertSystemTemp2CharTemp(
           await this.system_config.getZoneActivityCoolSetpoint(
             this.accessory.context.zone,
-            await this.getZoneActvity(this.accessory.context.zone),
+            await this.getZoneActivity(this.accessory.context.zone),
           ),
         );
       })
@@ -141,7 +141,7 @@ export class InfinityEvolutionPlatformAccessory {
         return this.convertSystemTemp2CharTemp(
           await this.system_config.getZoneActivityHeatSetpoint(
             this.accessory.context.zone,
-            await this.getZoneActvity(this.accessory.context.zone),
+            await this.getZoneActivity(this.accessory.context.zone),
           ),
         );
       })
@@ -196,7 +196,7 @@ export class InfinityEvolutionPlatformAccessory {
     ).wrap(this.fan_service);
   }
 
-  async getZoneActvity(zone: string): Promise<string> {
+  async getZoneActivity(zone: string): Promise<string> {
     // Vacation scheduling is weird, and changes infrequently. Just get it from status.
     if (await this.system_status.getZoneActivity(zone) === ACTIVITY.VACATION) {
       return ACTIVITY.VACATION;

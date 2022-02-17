@@ -183,7 +183,7 @@ export class InfinityEvolutionApiConnection {
 }
 
 abstract class BaseInfinityEvolutionApiModel {
-  // TODO make unknown and handle type checking in getters
+  // TODO make unknown and handle type checking in get methods
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   protected data_object: any = null;
   protected write_lock: Mutex;
@@ -256,8 +256,8 @@ export class InfinityEvolutionLocations extends BaseInfinityEvolutionApiModel {
     const systems: string[] = [];
     for (const location of this.data_object.locations.location) {
       for (const system of location.systems[0].system) {
-        const linkparts = system['atom:link'][0]['$']['href'].split('/');
-        systems.push(linkparts[linkparts.length - 1]);
+        const link_parts = system['atom:link'][0]['$']['href'].split('/');
+        systems.push(link_parts[link_parts.length - 1]);
       }
     }
     return systems;
@@ -469,8 +469,8 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
       };
     }
 
-    const activites_obj = (await this.getZone(zone)).activities![0];
-    return activites_obj['activity'].find(
+    const activities_obj = (await this.getZone(zone)).activities![0];
+    return activities_obj['activity'].find(
       (activity: ZoneActivity) => activity['$'].id === activity_name,
     );
   }

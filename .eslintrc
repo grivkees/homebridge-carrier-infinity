@@ -5,6 +5,9 @@
     "plugin:@typescript-eslint/eslint-recommended",
     "plugin:@typescript-eslint/recommended" // uses the recommended rules from the @typescript-eslint/eslint-plugin
   ],
+  "plugins": [
+    "spellcheck"
+  ],
   "parserOptions": {
     "ecmaVersion": 2018,
     "sourceType": "module"
@@ -16,6 +19,40 @@
     "quotes": ["warn", "single"],
     "indent": ["warn", 2, { "SwitchCase": 1 }],
     "semi": ["off"],
+    "spellcheck/spell-checker": [
+      "warn",
+      {
+        "strings": false,
+        "skipWords": [
+          "axios",
+          "bryant",
+          "cdata",
+          "cfgem",
+          "clsp",
+          "cmode",
+          "ctype",
+          "Fanv",
+          "filtrlvl",
+          "featureset",
+          "Homebridge",
+          "htsp",
+          "mutex",
+          "rh",
+          "setpoint",
+          "setpoints",
+          "sig",
+          "svalue",
+          "oauth",
+          "unregister",
+          "vacmaxt",
+          "vacmint",
+          "vacfan",
+          "xml",
+          "xml2js",
+          "zoneconditioning"
+        ]
+      }
+    ],
     "comma-dangle": ["warn", "always-multiline"],
     "dot-notation": "off",
     "eqeqeq": "warn",

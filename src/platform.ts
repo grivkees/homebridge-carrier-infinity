@@ -130,7 +130,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       }
     }
     const old_accessories = this.accessories.filter(
-      accesory => !accessories.includes(accesory),
+      accessory => !accessories.includes(accessory),
     );
     old_accessories.forEach(accessory => {
       this.log.info(
