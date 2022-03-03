@@ -23,14 +23,13 @@ import { FAN_MODE, SYSTEM_MODE } from './infinityApi';
 class FanStatus extends ThermostatCharacteristicWrapper {
   ctype = this.Characteristic.Active;
   get = async () => {
-    // if the fan is on ... the fan is on
-    if (await this.system.config.getMode() === SYSTEM_MODE.FAN_ONLY) {
+    // if the fan is on... the fan is on.
+    if (await this.system.status.getZoneFan(this.context.zone) !== FAN_MODE.OFF) {
       return this.Characteristic.Active.ACTIVE;
     }
-    // if the system is on and any fan override is set ... the fan must be on
+    // if the zone is conditioning... the fan is on.
     if (
-      await this.system.config.getMode() !== SYSTEM_MODE.OFF &&
-      await this.system.config.getZoneActivityFan(this.context.zone, await this.getActivity()) !== FAN_MODE.OFF
+      await this.system.status.getZoneConditioning(this.context.zone) !== SYSTEM_MODE.OFF
     ) {
       return this.Characteristic.Active.ACTIVE;
     }
