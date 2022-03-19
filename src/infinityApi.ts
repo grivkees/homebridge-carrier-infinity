@@ -3,7 +3,7 @@ import { INFINITY_API_BASE_URL, INFINITY_API_CONSUMER_KEY, INFINITY_API_CONSUMER
 import Axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import oauthSignature from 'oauth-signature';
 import { MemoizeExpiring } from 'typescript-memoize';
-import { Mutex } from 'async-mutex';
+import { Mutex, tryAcquire, E_ALREADY_LOCKED, E_CANCELED } from 'async-mutex';
 import * as xml2js from 'xml2js';
 import { Logger } from 'homebridge';
 import hash from 'object-hash';
@@ -210,10 +210,16 @@ abstract class BaseInfinityEvolutionApiModel {
 
   @MemoizeExpiring(10 * 1000)
   async fetch(): Promise<void> {
-    // Don't fetch while writes are happening.
-    await this.write_lock.runExclusive(async () => {
-      await this.forceFetch();
-    });    
+    // If push is ongoing, skip this update fetch. The push will do a fetch.
+    try {
+      await tryAcquire(this.write_lock).runExclusive(async () => {
+        await this.forceFetch();
+      });
+    } catch (e) {
+      if (e !== E_ALREADY_LOCKED) {
+        this.api_connection.log.error(`Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
+      }
+    }
   }
 
   protected async forceFetch(): Promise<void> {
@@ -509,14 +515,19 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
   mutations: (() => Promise<void>)[] = [];
 
   private async push(): Promise<void> {
-    // Wait a bit so we can catch any other mutations that came in around the
-    // same time ...
+    // Wait a bit so we can catch other mutations that came in around the
+    // same time.
     await new Promise(r => setTimeout(r, 2000));
-    // ... and then make sure we aren't already fetching or pushing ...
-    await this.write_lock.runExclusive(async () => {
-      // ... and then only run if we still have mutations to do.
-      if (this.mutations.length > 0) {
-        // 1. Do mutations
+    // We only ever need 2 pushes ongoing at a time. One active, and one pending.
+    // The first one will handle mutations available at its start, and the next
+    // one will cover mutations that arrived during the previous's run.
+    // First, to make sure we only ever have one 'pending' push, cancel any other
+    // possible 'pending' pushes, and make this one become the 'pending' push.
+    this.write_lock.cancel();
+    // Then, grab the lock. so this push can move from 'pending' to 'active'.
+    try {
+      await this.write_lock.runExclusive(async () => {
+      // 1. Do mutations
         const mutated_hash = await this.mutate();
         if (mutated_hash === null) {
           return;
@@ -531,12 +542,20 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
         } else {
           this.api_connection.log.warn('Changes may not have successfully propagated to the carrier api.');
         }
-
+      });
+    } catch (e) {
+      if (e !== E_CANCELED) {
+        this.api_connection.log.error(`Deadlock on push ${e}. Report bug: https://bit.ly/3igbU7D`);
       }
-    });
+    }
   }
 
   private async mutate(): Promise<string | null> {
+    // short circuit if no mutations in queue
+    if (this.mutations.length === 0) {
+      return null;
+    }
+
     // Refresh config.
     const old_hash = this.data_object_hash;
     await this.forceFetch();
@@ -546,13 +565,15 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
       );
     }
 
-    // Do all the config mutations we have stored, and clear the array.
+    // Take config mutations of the queue and run them.
     // TODO make mutations non-async. these need to happen in order. and async
     // in a loop is an anti-pattern.
-    for (const m of this.mutations) {
-      await m();
+    while(this.mutations.length > 0) {
+      const m = this.mutations.shift();
+      if (m) {
+        await m();
+      }
     }
-    this.mutations = [];
     const mutated_hash = this.hashDataObject();
 
     // If nothing actually changed, no need to push.
