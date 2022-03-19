@@ -60,7 +60,7 @@ export class InfinityEvolutionPlatformAccessory {
         .setCharacteristic(this.platform.Characteristic.Manufacturer, `${await this.system_profile.getBrand()} Home`)
         .setCharacteristic(this.platform.Characteristic.Model, await this.system_profile.getModel());
     });
-        
+
     // Create handlers
     new ACService(
       this.platform,

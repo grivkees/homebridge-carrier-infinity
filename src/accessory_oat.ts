@@ -29,7 +29,7 @@ export class OutdoorTemperatureAccessory {
       this.accessory.getService(this.platform.Service.TemperatureSensor) ||
       this.accessory.addService(this.platform.Service.TemperatureSensor),
     );
-  
+
     new AccessoryInformation(
       this.platform,
       this.accessory.context,
