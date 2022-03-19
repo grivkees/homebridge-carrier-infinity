@@ -1,7 +1,7 @@
 import { API } from 'homebridge';
 
 import { PLATFORM_NAME } from './settings';
-import { CarrierInfinityHomebridgePlatform } from './platform'; 
+import { CarrierInfinityHomebridgePlatform } from './platform';
 
 /**
  * This method registers the platform with Homebridge

@@ -47,7 +47,7 @@ class FanStatus extends ThermostatCharacteristicWrapper {
     }
 
     // if we are trying to turn off fan, turn off fan override (i.e. set fan speed=auto)
-    // NOTE: If system is in FAN_ONLY mode, it will remain in FAN ONLY, but with speed=auto. 
+    // NOTE: If system is in FAN_ONLY mode, it will remain in FAN ONLY, but with speed=auto.
     if (value === this.Characteristic.Active.INACTIVE) {
       return await this.system.config.setZoneActivity(
         this.context.zone,
