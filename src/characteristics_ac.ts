@@ -16,7 +16,7 @@ class CurrentACStatus extends ThermostatCharacteristicWrapper {
       case SYSTEM_MODE.HEAT:
         return this.Characteristic.CurrentHeatingCoolingState.HEAT;
       default:
-        this.log.error(`Unknown current state '${current_state}'. Defaulting to off.`);
+        this.log.error(`Unknown current state '${current_state}'. Report bug: https://bit.ly/3igbU7D`);
         return this.Characteristic.CurrentHeatingCoolingState.OFF;
     }
   };
@@ -37,7 +37,7 @@ class TargetACState extends ThermostatCharacteristicWrapper {
       case SYSTEM_MODE.AUTO:
         return this.Characteristic.TargetHeatingCoolingState.AUTO;
       default:
-        this.log.error(`Unknown target state '${target_state}'. Defaulting to off.`);
+        this.log.error(`Unknown target state '${target_state}'. Report bug: https://bit.ly/3igbU7D`);
         return this.Characteristic.TargetHeatingCoolingState.OFF;
     }
   };
