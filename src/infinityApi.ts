@@ -329,6 +329,7 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     switch(raw_mode) {
       case 'gasheat':
       case 'electric':
+      case 'hpheat':
         return SYSTEM_MODE.HEAT;
       case 'dehumidify':
         return SYSTEM_MODE.COOL;
@@ -346,11 +347,15 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     const raw_mode = (await this.getZone(zone)).zoneconditioning![0];
     switch(raw_mode) {
       case 'active_heat':
+      case 'prep_heat':
         return SYSTEM_MODE.HEAT;
       case 'active_cool':
+      case 'prep_cool':
         return SYSTEM_MODE.COOL;
-      default:
+      case 'idle':
         return SYSTEM_MODE.OFF;
+      default:
+        return raw_mode;
     }
   }
 
