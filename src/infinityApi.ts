@@ -33,6 +33,11 @@ export const FAN_MODE = {
   HIGH: 'high',
 };
 
+export const STATUS = {
+  ON: 'on',
+  OFF: 'off',
+};
+
 interface BaseElement {
   '$': {id: string};
 }
@@ -304,7 +309,7 @@ export class InfinityEvolutionSystemProfile extends BaseInfinityEvolutionSystemA
   async getZones(): Promise<Array<string>> {
     await this.fetch();
     return this.data_object.system_profile.zones[0].zone.filter(
-      (zone: { present: string[] }) => zone['present'][0] === 'on',
+      (zone: { present: string[] }) => zone['present'][0] === STATUS.ON,
     ).map(
       (zone: BaseElement) => zone['$'].id,
     );
@@ -434,12 +439,12 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
 
   async getZoneActivity(zone: string): Promise<string> {
     const zone_obj = await this.getZone(zone);
-    if (zone_obj.hold[0] === 'on') {
+    if (zone_obj.hold[0] === STATUS.ON) {
       return zone_obj.holdActivity![0];
     } else {
       const now = new Date();
       const program_obj = (await this.getZone(zone)).program![0];
-      const today_schedule = program_obj.day[now.getDay()].period.filter(period => period.enabled[0] === 'on').reverse();
+      const today_schedule = program_obj.day[now.getDay()].period.filter(period => period.enabled[0] === STATUS.ON).reverse();
       for (const i in today_schedule) {
         const time = today_schedule[i].time[0];
         const split = time.split(':');
@@ -453,7 +458,9 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
         }
       }
       // If we got to the end without finding the next activity, it means the activity is the last from yesterday
-      const yesterday_schedule = program_obj['day'][(now.getDay() + 8) % 7].period.filter(period => period.enabled[0] === 'on').reverse();
+      const yesterday_schedule = program_obj['day'][(now.getDay() + 8) % 7].period.filter(
+        period => period.enabled[0] === STATUS.ON,
+      ).reverse();
       return yesterday_schedule[0].activity[0];
     }
   }
@@ -659,7 +666,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     }
     // Always set to manual activity
     zone_obj['holdActivity']![0] = ACTIVITY.MANUAL;
-    zone_obj['hold'][0] = 'on';
+    zone_obj['hold'][0] = STATUS.ON;
     zone_obj['otmr'][0] = hold_until || '';
     // Set setpoints on manual activity
     [htsp, clsp] = processSetpointDeadband(
