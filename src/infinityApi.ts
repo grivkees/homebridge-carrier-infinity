@@ -65,6 +65,7 @@ interface Zone {
   activities?: ZoneActivity[];
   program?: ZoneProgram[];
   zoneconditioning?: string[];
+  damperposition?: string[];
 }
 
 class OAuthHeaders {
@@ -366,7 +367,12 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
   }
 
   async getZoneFan(zone: string): Promise<string> {
-    return (await this.getZone(zone)).fan[0];
+    const zone_obj = await this.getZone(zone);
+    if (zone_obj.damperposition![0] === '0') {
+      return FAN_MODE.OFF;
+    } else {
+      return zone_obj.fan[0];
+    }
   }
 
   async getZoneTemp(zone: string): Promise<number> {
