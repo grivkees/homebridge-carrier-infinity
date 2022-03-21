@@ -23,18 +23,29 @@ import { FAN_MODE, SYSTEM_MODE } from './infinityApi';
 class FanStatus extends ThermostatCharacteristicWrapper {
   ctype = this.Characteristic.Active;
   get = async () => {
-    // if the fan is on... the fan is on.
-    if (await this.system.status.getZoneFan(this.context.zone) !== FAN_MODE.OFF) {
-      return this.Characteristic.Active.ACTIVE;
-    }
-    // if the zone is conditioning... the fan is on.
     if (
+      // if the system is configured to be off, the fan must be off
+      await this.system.config.getMode() === SYSTEM_MODE.OFF
+    ) {
+      return this.Characteristic.Active.INACTIVE;
+    } else if (
+      // zone config api says manual fan mode
+      await this.system.config.getZoneActivityFan(this.context.zone, await this.getActivity()) !== FAN_MODE.OFF ||
+      // zone status api says fan is on
+      await this.system.status.getZoneFan(this.context.zone) !== FAN_MODE.OFF ||
+      // zone status api says zone is conditioning
       await this.system.status.getZoneConditioning(this.context.zone) !== SYSTEM_MODE.OFF
     ) {
-      return this.Characteristic.Active.ACTIVE;
+      // but there is an exception to the above... which is the fan status/config
+      // can be wrong if the zone is actually closed off.
+      if (await this.system.status.getZoneOpen(this.context.zone)) {
+        return this.Characteristic.Active.ACTIVE;
+      } else {
+        return this.Characteristic.Active.INACTIVE;
+      }
+    } else {
+      return this.Characteristic.Active.INACTIVE;
     }
-    // anything else ...
-    return this.Characteristic.Active.INACTIVE;
   };
 
   set = async (value: CharacteristicValue) => {
@@ -56,6 +67,35 @@ class FanStatus extends ThermostatCharacteristicWrapper {
         await this.getHoldTime(),
         FAN_MODE.OFF,
       );
+    }
+  };
+}
+
+class FanState extends ThermostatCharacteristicWrapper {
+  ctype = this.Characteristic.CurrentFanState;
+  get = async () => {
+    if (
+      // if the system is configured to be off, the fan must be off
+      await this.system.config.getMode() === SYSTEM_MODE.OFF
+    ) {
+      return this.Characteristic.CurrentFanState.INACTIVE;
+    } else if (
+      // zone config api says manual fan mode
+      await this.system.config.getZoneActivityFan(this.context.zone, await this.getActivity()) !== FAN_MODE.OFF ||
+      // zone status api says fan is on
+      await this.system.status.getZoneFan(this.context.zone) !== FAN_MODE.OFF ||
+      // zone status api says zone is conditioning
+      await this.system.status.getZoneConditioning(this.context.zone) !== SYSTEM_MODE.OFF
+    ) {
+      // but there is an exception to the above... which is the fan status/config
+      // can be wrong if the zone is actually closed off.
+      if (await this.system.status.getZoneOpen(this.context.zone)) {
+        return this.Characteristic.CurrentFanState.BLOWING_AIR;
+      } else {
+        return this.Characteristic.CurrentFanState.IDLE;
+      }
+    } else {
+      return this.Characteristic.CurrentFanState.IDLE;
     }
   };
 }
@@ -121,6 +161,7 @@ class TargetFanState extends ThermostatCharacteristicWrapper {
 export class FanService extends MultiWrapper {
   WRAPPERS = [
     FanStatus,
+    FanState,
     FanSpeed,
     TargetFanState,
   ];

@@ -375,6 +375,10 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     }
   }
 
+  async getZoneOpen(zone: string): Promise<boolean> {
+    return (await this.getZone(zone)).damperposition![0] !== '0';
+  }
+
   async getZoneTemp(zone: string): Promise<number> {
     return Number((await this.getZone(zone)).rt[0]);
   }
