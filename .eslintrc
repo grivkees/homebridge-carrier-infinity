@@ -32,6 +32,7 @@
           "cmode",
           "ctype",
           "damperposition",
+          "deadband",
           "Fanv",
           "filtrlvl",
           "featureset",

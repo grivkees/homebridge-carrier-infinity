@@ -1,3 +1,4 @@
+import { processSetpointDeadband } from './helpers';
 import { INFINITY_API_BASE_URL, INFINITY_API_CONSUMER_KEY, INFINITY_API_CONSUMER_SECRET } from './settings';
 
 import Axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
@@ -511,16 +512,6 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     return tomorrow_obj['period'][0].time[0];
   }
 
-  private async roundSetpoint(temp: number): Promise<string> {
-    if (await this.getUnits() === 'F') {
-      // Increments of 1
-      return temp.toFixed(0);
-    } else {
-      // Increments of .5
-      return (Math.round(temp * 2) / 2).toFixed(1);
-    }
-  }
-
   /* Write APIs */
   mutations: (() => Promise<void>)[] = [];
 
@@ -671,12 +662,16 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     zone_obj['hold'][0] = 'on';
     zone_obj['otmr'][0] = hold_until || '';
     // Set setpoints on manual activity
-    if (clsp) {
-      manual_activity_obj['clsp'][0] = await this.roundSetpoint(clsp);
-    }
-    if (htsp) {
-      manual_activity_obj['htsp'][0] = await this.roundSetpoint(htsp);
-    }
+    [htsp, clsp] = processSetpointDeadband(
+      htsp || parseFloat(manual_activity_obj['htsp'][0]),
+      clsp || parseFloat(manual_activity_obj['clsp'][0]),
+      await this.getUnits(),
+      // when setpoints are too close, make clsp sticky when no change made to htsp
+      htsp === null,
+    );
+    manual_activity_obj['htsp'][0] = htsp.toFixed(1);
+    manual_activity_obj['clsp'][0] = clsp.toFixed(1);
+    // Set fan on manual activity
     if (fan) {
       manual_activity_obj['fan'][0] = fan;
     }
