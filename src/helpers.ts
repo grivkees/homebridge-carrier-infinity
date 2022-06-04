@@ -12,9 +12,12 @@ export function convertSystemTemp2CharTemp(temp: number, units: string): Charact
 export function convertCharTemp2SystemTemp(temp: CharacteristicValue, units: string): number {
   temp = Number(temp);
   if (units === 'F') {
-    return (9.0 / 5.0 * temp) + 32;
+    // HK keeps track in C, but infinity can be either C or F. Convert to F if
+    // needed, then round to degree for infinity.
+    return Math.round((9.0 / 5.0 * temp) + 32);
   } else {
-    return temp;
+    // Round C to half degree for infinity.
+    return Math.round(temp * 2) / 2;
   }
 }
 
@@ -50,4 +53,21 @@ export function convertCharFan2SystemFan(fan: CharacteristicValue): string {
     default:
       return FAN_MODE.OFF;
   }
+}
+
+export function processSetpointDeadband(
+  htsp: number,
+  clsp: number,
+  units: string,
+  sticky_clsp: boolean,
+): [number, number]{
+  const deadband = units === 'F' ? 2 : 1;
+  if (clsp - htsp < deadband) {
+    if (sticky_clsp) {
+      htsp = clsp - deadband;
+    } else {
+      clsp = htsp + deadband;
+    }
+  }
+  return [htsp, clsp];
 }
