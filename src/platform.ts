@@ -1,7 +1,7 @@
-import { API, Categories, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
+import { API, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { ThermostatAccessory } from '././accessory_thermostat';
+import { ThermostatAccessory } from './accessory_thermostat';
 import { OutdoorTemperatureAccessory } from './accessory_oat';
 import {
   InfinityEvolutionApiConnection,
