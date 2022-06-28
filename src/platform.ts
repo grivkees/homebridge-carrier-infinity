@@ -67,27 +67,6 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     return accessory;
   }
 
-  async registerOutdoorTempAccessory(system: InfinityEvolutionSystemModel): Promise<PlatformAccessory> {
-    this.log.info(`Discovered outdoor temp sensor device serial:${system.serialNumber}`);
-    let is_new = false;
-    const uuid = this.api.hap.uuid.generate(`OAT:${system.serialNumber}`);
-    let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
-    if (!accessory) {
-      const name = 'Outdoor Temperature';
-      this.log.info('Adding new accessory: ', name);
-      accessory = new this.api.platformAccessory(name, uuid, Categories.SENSOR);
-      is_new = true;
-    }
-    accessory.context.serialNumber = system.serialNumber;
-    new OutdoorTemperatureAccessory(this, accessory);
-    if (is_new) {
-      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-    } else {
-      this.api.updatePlatformAccessories([accessory]);
-    }
-    return accessory;
-  }
-
   async discoverSystems(): Promise<void> {
     const found_accessories: PlatformAccessory[] = [];
 
@@ -102,7 +81,11 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       this.log.info(`Discovered system ${JSON.stringify(context_system)}}`);
       // -> System Accessory: Outdoor Temp Sensor
       if (this.config['showOutdoorTemperatureSensor']) {
-        found_accessories.push(await this.registerOutdoorTempAccessory(system));
+        const accessory = new OutdoorTemperatureAccessory(
+          this,
+          {...context_system, name: 'Outdoor Temperature'},
+        );
+        found_accessories.push(accessory.accessory);
       }
 
       // Add system+zone based accessories
@@ -127,8 +110,6 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
         }
       }
     }
-
-
 
     const missing_accessories = this.accessories.filter(
       accessory => !found_accessories.includes(accessory),
