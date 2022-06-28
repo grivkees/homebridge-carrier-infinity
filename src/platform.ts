@@ -44,29 +44,6 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     this.accessories.push(accessory);
   }
 
-  async registerEnvSensorAccessory(system: InfinityEvolutionSystemModel, zone: string): Promise<PlatformAccessory> {
-    this.log.info(`Discovered environmental sensor device serial:${system.serialNumber}`);
-    let is_new = false;
-    // UUID is one off from zone id due to old error
-    const uuid = this.api.hap.uuid.generate(`ENVSENSOR:${system.serialNumber}:${Number(zone)-1}`);
-    let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
-    if (!accessory) {
-      const name = `${await system.config.getZoneName(zone)} Environmental Sensor`;
-      this.log.info('Adding new accessory: ', name);
-      accessory = new this.api.platformAccessory(name, uuid, Categories.SENSOR);
-      is_new = true;
-    }
-    accessory.context.serialNumber = system.serialNumber;
-    accessory.context.zone = zone;
-    new EnvSensorAccessory(this, accessory);
-    if (is_new) {
-      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-    } else {
-      this.api.updatePlatformAccessories([accessory]);
-    }
-    return accessory;
-  }
-
   async discoverSystems(): Promise<void> {
     const found_accessories: PlatformAccessory[] = [];
 
@@ -106,7 +83,14 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
         found_accessories.push(accessory.accessory);
         // -> Zone Accessory: Env Sensor
         if (this.config['showIndoorHumiditySensors']) {
-          found_accessories.push(await this.registerEnvSensorAccessory(system, zone));
+          const accessory = new EnvSensorAccessory(
+            this,
+            {
+              ...context_zone,
+              name: `${await system.config.getZoneName(zone)} Environmental Sensor`,
+            },
+          );
+          found_accessories.push(accessory.accessory);
         }
       }
     }

@@ -1,13 +1,19 @@
-import { PlatformAccessory } from 'homebridge';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { AccessoryInformation } from './base';
 import { ThermostatRHService } from './characteristics_humidity';
+import { BaseAccessory } from './accessory_base';
 
-export class EnvSensorAccessory {
+export class EnvSensorAccessory extends BaseAccessory {
+  protected ID(context: Record<string, string>): string {
+    return `ENVSENSOR:${context.serialNumber}:${Number(context.zone)-1}`;
+  }
+
   constructor(
-    private readonly platform: CarrierInfinityHomebridgePlatform,
-    private readonly accessory: PlatformAccessory,
+    platform: CarrierInfinityHomebridgePlatform,
+    context: Record<string, string>,
   ) {
+    super(platform, context);
+
     new ThermostatRHService(
       this.platform,
       this.accessory.context,
