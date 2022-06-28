@@ -19,10 +19,19 @@
   "scripts": {
     "commit": "git-cz",
     "lint": "eslint src/**.ts --max-warnings=0",
-    "watch": "npm run build && npm link && nodemon",
+    "watch": "npm run build && (sudo hb-service link || true) && nodemon",
     "build": "rimraf ./dist && tsc",
     "prepublishOnly": "npm run lint && npm run build",
     "test": "jest"
+  },
+  "nodemonConfig": {
+    "watch": ["src"],
+    "ext": "ts",
+    "exec": "tsc && sudo hb-service restart",
+    "delay": 5000,
+    "env": {
+      "NODE_OPTIONS": "--trace-warnings"
+    }
   },
   "keywords": [
     "homebridge-plugin",
