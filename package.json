@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Carrier Infinity",
   "name": "homebridge-carrier-infinity",
-  "version": "1.5.13",
+  "version": "1.5.14",
   "description": "Standalone homebridge plugin for Carrier Infinity / Bryant Evolution / ICP Brands Ion thermostats.",
   "license": "MIT",
   "repository": {
@@ -25,7 +25,9 @@
     "test": "jest"
   },
   "nodemonConfig": {
-    "watch": ["src"],
+    "watch": [
+      "src"
+    ],
     "ext": "ts",
     "exec": "tsc && sudo hb-service restart",
     "delay": 5000,
