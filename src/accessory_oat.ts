@@ -28,6 +28,7 @@ export class OutdoorTemperatureAccessory extends BaseAccessory {
     context: Record<string, string>,
   ) {
     super(platform, context);
+
     new OutdoorTempSensorService(
       this.platform,
       this.accessory.context,
