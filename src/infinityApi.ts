@@ -353,7 +353,9 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
 
   private async getZone(zone: string): Promise<Zone> {
     await this.fetch();
-    return this.data_object.status.zones[0].zone[zone];
+    return this.data_object.status.zones[0].zone.find(
+      (z: BaseElement) => z['$'].id === zone.toString(),
+    );
   }
 
   async getZoneConditioning(zone: string): Promise<string> {
@@ -429,7 +431,9 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
 
   private async getZone(zone: string): Promise<Zone> {
     await this.fetch();
-    return this.data_object.config.zones[0].zone[zone.toString()];
+    return this.data_object.config.zones[0].zone.find(
+      (z: BaseElement) => z['$'].id === zone.toString(),
+    );
   }
 
   async getZoneName(zone: string): Promise<string> {
