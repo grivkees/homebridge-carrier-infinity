@@ -1,7 +1,7 @@
-import { PlatformAccessory } from 'homebridge';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { AccessoryInformation, CharacteristicWrapper, MultiWrapper } from './base';
 import { convertSystemTemp2CharTemp } from './helpers';
+import { BaseAccessory } from './accessory_base';
 
 class OATSensorTemp extends CharacteristicWrapper {
   ctype = this.Characteristic.CurrentTemperature;
@@ -17,11 +17,17 @@ export class OutdoorTempSensorService extends MultiWrapper {
   WRAPPERS = [OATSensorTemp];
 }
 
-export class OutdoorTemperatureAccessory {
+export class OutdoorTemperatureAccessory extends BaseAccessory {
+
+  protected ID(context: Record<string, string>): string {
+    return `OAT:${context.serialNumber}`;
+  }
+
   constructor(
-    private readonly platform: CarrierInfinityHomebridgePlatform,
-    private readonly accessory: PlatformAccessory,
+    platform: CarrierInfinityHomebridgePlatform,
+    context: Record<string, string>,
   ) {
+    super(platform, context);
     new OutdoorTempSensorService(
       this.platform,
       this.accessory.context,
