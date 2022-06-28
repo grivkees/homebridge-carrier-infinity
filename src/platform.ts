@@ -1,7 +1,7 @@
 import { API, Categories, DynamicPlatformPlugin, Logger, PlatformAccessory, PlatformConfig, Service, Characteristic } from 'homebridge';
 
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { InfinityEvolutionPlatformAccessory } from './platformAccessory';
+import { ThermostatAccessory } from '././accessory_thermostat';
 import { OutdoorTemperatureAccessory } from './accessory_oat';
 import {
   InfinityEvolutionApiConnection,
@@ -46,27 +46,18 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
 
   async registerAccessory(system: InfinityEvolutionSystemModel, zone: string): Promise<PlatformAccessory> {
     this.log.info(`Discovered device serial:${system.serialNumber} zone:${zone}`);
-    let is_new = false;
-    // UUID is one off from zone id due to old error
-    const uuid = this.api.hap.uuid.generate(`${system.serialNumber}:${Number(zone)-1}`);
-    let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
-    if (!accessory) {
-      const name = await system.config.getZoneName(zone);
-      this.log.info('Adding new accessory:', name);
-      accessory = new this.api.platformAccessory(name, uuid);
-      is_new = true;
-    }
-    accessory.context.serialNumber = system.serialNumber;
-    accessory.context.zone = zone;
-    accessory.context.holdBehavior = this.config['holdBehavior'];
-    accessory.context.holdArgument = this.config['holdArgument'];
-    new InfinityEvolutionPlatformAccessory(this, accessory);
-    if (is_new) {
-      this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
-    } else {
-      this.api.updatePlatformAccessories([accessory]);
-    }
-    return accessory;
+
+    const accessory = new ThermostatAccessory(
+      this,
+      {
+        name: await system.config.getZoneName(zone),
+        serialNumber: system.serialNumber,
+        zone: zone,
+        holdBehavior: this.config['holdBehavior'],
+        holdArgument: this.config['holdArgument'],
+      },
+    );
+    return accessory.accessory;
   }
 
   async registerEnvSensorAccessory(system: InfinityEvolutionSystemModel, zone: string): Promise<PlatformAccessory> {

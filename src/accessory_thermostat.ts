@@ -1,4 +1,4 @@
-import { Service, PlatformAccessory } from 'homebridge';
+import { Service } from 'homebridge';
 
 import { CarrierInfinityHomebridgePlatform } from './platform';
 
@@ -14,22 +14,28 @@ import {
 import { ThermostatRHService } from './characteristics_humidity';
 import { FanService } from './characteristics_fan';
 import { ACService } from './characteristics_ac';
+import { BaseAccessory } from './accessory_base';
 
-export class InfinityEvolutionPlatformAccessory {
+export class ThermostatAccessory extends BaseAccessory {
   private service: Service;
   private fan_service?: Service;
   private system_status: InfinityEvolutionSystemStatus;
   private system_config: InfinityEvolutionSystemConfig;
   private system_profile: InfinityEvolutionSystemProfile;
 
+  protected ID(context: Record<string, string>): string {
+    return `${context.serialNumber}:${Number(context.zone)-1}`;
+  }
+
   constructor(
-    private readonly platform: CarrierInfinityHomebridgePlatform,
-    private readonly accessory: PlatformAccessory,
+    platform: CarrierInfinityHomebridgePlatform,
+    context: Record<string, string>,
   ) {
+    super(platform, context);
     const system = this.platform.systems[this.accessory.context.serialNumber];
     // Create services
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, accessory.context.serialNumber);
+      .setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.context.serialNumber);
 
     this.service = this.accessory.getService(
       this.platform.Service.Thermostat) || this.accessory.addService(this.platform.Service.Thermostat,
