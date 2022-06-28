@@ -58,7 +58,7 @@
     "@commitlint/cz-commitlint": "^17.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/jest": "^27.0.2",
-    "@types/node": "^17.0.21",
+    "@types/node": "^18.0.0",
     "@types/object-hash": "^2.2.0",
     "@types/xml2js": "^0.4.8",
     "@typescript-eslint/eslint-plugin": "^5.12.0",
