@@ -47,7 +47,8 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   async registerAccessory(system: InfinityEvolutionSystemModel, zone: string): Promise<PlatformAccessory> {
     this.log.info(`Discovered device serial:${system.serialNumber} zone:${zone}`);
     let is_new = false;
-    const uuid = this.api.hap.uuid.generate(`${system.serialNumber}:${zone}`);
+    // UUID is one off from zone id due to old error
+    const uuid = this.api.hap.uuid.generate(`${system.serialNumber}:${Number(zone)-1}`);
     let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
     if (!accessory) {
       const name = await system.config.getZoneName(zone);
@@ -71,7 +72,8 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   async registerEnvSensorAccessory(system: InfinityEvolutionSystemModel, zone: string): Promise<PlatformAccessory> {
     this.log.info(`Discovered environmental sensor device serial:${system.serialNumber}`);
     let is_new = false;
-    const uuid = this.api.hap.uuid.generate(`ENVSENSOR:${system.serialNumber}:${zone}`);
+    // UUID is one off from zone id due to old error
+    const uuid = this.api.hap.uuid.generate(`ENVSENSOR:${system.serialNumber}:${Number(zone)-1}`);
     let accessory = this.accessories.find(accessory => accessory.UUID === uuid);
     if (!accessory) {
       const name = `${await system.config.getZoneName(zone)} Environmental Sensor`;
@@ -118,8 +120,8 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       const system = new InfinityEvolutionSystemModel(this.api_connection, serialNumber);
       this.systems[serialNumber] = system;  // save ref for lookup by accessories
       const zones = await system.profile.getZones();
-      // TODO: messed up here. This is the zone index, not the zone id. index = id - 1
-      for (const zone in zones) {
+      // go through zone ids themselves, not the index of the zone array
+      for (const zone of zones) {
         accessories.push(await this.registerAccessory(system, zone));
         if (this.config['showIndoorHumiditySensors']) {
           accessories.push(await this.registerEnvSensorAccessory(system, zone));
