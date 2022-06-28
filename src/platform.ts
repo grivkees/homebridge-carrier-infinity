@@ -34,7 +34,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     this.api_connection.refreshToken().then();
 
     this.api.on('didFinishLaunching', () => {
-      this.discoverDevices().then().catch(error => {
+      this.discoverSystems().then().catch(error => {
         this.log.error('Could not discover devices: ' + error.message);
       });
     });
@@ -42,22 +42,6 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
 
   configureAccessory(accessory: PlatformAccessory): void {
     this.accessories.push(accessory);
-  }
-
-  async registerAccessory(system: InfinityEvolutionSystemModel, zone: string): Promise<PlatformAccessory> {
-    this.log.info(`Discovered device serial:${system.serialNumber} zone:${zone}`);
-
-    const accessory = new ThermostatAccessory(
-      this,
-      {
-        name: await system.config.getZoneName(zone),
-        serialNumber: system.serialNumber,
-        zone: zone,
-        holdBehavior: this.config['holdBehavior'],
-        holdArgument: this.config['holdArgument'],
-      },
-    );
-    return accessory.accessory;
   }
 
   async registerEnvSensorAccessory(system: InfinityEvolutionSystemModel, zone: string): Promise<PlatformAccessory> {
@@ -104,32 +88,56 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     return accessory;
   }
 
-  async discoverDevices(): Promise<void> {
+  async discoverSystems(): Promise<void> {
+    const found_accessories: PlatformAccessory[] = [];
+
     const systems = await new InfinityEvolutionLocations(this.api_connection).getSystems();
-    const accessories: PlatformAccessory[] = [];
     for (const serialNumber of systems) {
+      // Create system api object, and save for later reference
       const system = new InfinityEvolutionSystemModel(this.api_connection, serialNumber);
-      this.systems[serialNumber] = system;  // save ref for lookup by accessories
+      this.systems[serialNumber] = system;
+
+      // Add system based accessories
+      const context_system = {serialNumber: system.serialNumber};
+      this.log.info(`Discovered system ${JSON.stringify(context_system)}}`);
+      // -> System Accessory: Outdoor Temp Sensor
+      if (this.config['showOutdoorTemperatureSensor']) {
+        found_accessories.push(await this.registerOutdoorTempAccessory(system));
+      }
+
+      // Add system+zone based accessories
       const zones = await system.profile.getZones();
-      // go through zone ids themselves, not the index of the zone array
-      for (const zone of zones) {
-        accessories.push(await this.registerAccessory(system, zone));
+      for (const zone of zones) {  // 'of' makes sure we go through zone ids, not index
+        const context_zone = {...context_system, zone: zone};
+        this.log.info(`Discovered zone ${JSON.stringify(context_zone)}`);
+        // -> Zone Accessory: Thermostat
+        const accessory = new ThermostatAccessory(
+          this,
+          {
+            ...context_zone,
+            name: await system.config.getZoneName(zone),
+            holdBehavior: this.config['holdBehavior'],
+            holdArgument: this.config['holdArgument'],
+          },
+        );
+        found_accessories.push(accessory.accessory);
+        // -> Zone Accessory: Env Sensor
         if (this.config['showIndoorHumiditySensors']) {
-          accessories.push(await this.registerEnvSensorAccessory(system, zone));
+          found_accessories.push(await this.registerEnvSensorAccessory(system, zone));
         }
       }
-      if (this.config['showOutdoorTemperatureSensor']) {
-        accessories.push(await this.registerOutdoorTempAccessory(system));
-      }
     }
-    const old_accessories = this.accessories.filter(
-      accessory => !accessories.includes(accessory),
+
+
+
+    const missing_accessories = this.accessories.filter(
+      accessory => !found_accessories.includes(accessory),
     );
-    old_accessories.forEach(accessory => {
+    missing_accessories.forEach(accessory => {
       this.log.info(
         `Removing old device "${accessory.displayName}" (serial:${accessory.context.serialNumber} zone:${accessory.context.zone})`,
       );
     });
-    this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, old_accessories);
+    this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, missing_accessories);
   }
 }
