@@ -10,7 +10,7 @@ export abstract class BaseAccessory {
     context: Record<string, string>,
   ) {
     const uuid = this.platform.api.hap.uuid.generate(this.ID(context));
-    let accessory = this.platform.accessories.find(accessory => accessory.UUID === uuid);
+    let accessory = this.platform.restored_accessories[uuid];
     if (!accessory) {
       this.platform.log.info(`[${context.name}] Added`);
       accessory = new this.platform.api.platformAccessory(context.name, uuid);
@@ -22,6 +22,7 @@ export abstract class BaseAccessory {
       this.platform.api.updatePlatformAccessories([accessory]);
     }
     this.accessory = accessory;
+    this.platform.accessories[uuid] = this;
   }
 
   protected abstract ID(context: Record<string, string>): string;

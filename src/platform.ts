@@ -9,13 +9,16 @@ import {
   InfinityEvolutionSystemModel,
 } from './infinityApi';
 import { EnvSensorAccessory } from './accessory_envsensor';
+import { BaseAccessory } from './accessory_base';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
   public readonly Characteristic: typeof Characteristic = this.api.hap.Characteristic;
 
   // this is used to track restored cached accessories
-  public readonly accessories: PlatformAccessory[] = [];
+  public readonly restored_accessories: Record<string, PlatformAccessory> = {};
+  // this is used to track plugin accessories objects
+  public readonly accessories: Record<string, BaseAccessory> = {};
 
   // carrier/bryant api
   public api_connection: InfinityEvolutionApiConnection;
@@ -41,12 +44,10 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
-    this.accessories.push(accessory);
+    this.restored_accessories[accessory.UUID] = accessory;
   }
 
   async discoverSystems(): Promise<void> {
-    const found_accessories: PlatformAccessory[] = [];
-
     const systems = await new InfinityEvolutionLocations(this.api_connection).getSystems();
     for (const serialNumber of systems) {
       // Create system api object, and save for later reference
@@ -58,11 +59,10 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       this.log.info(`Discovered system ${JSON.stringify(context_system)}}`);
       // -> System Accessory: Outdoor Temp Sensor
       if (this.config['showOutdoorTemperatureSensor']) {
-        const accessory = new OutdoorTemperatureAccessory(
+        new OutdoorTemperatureAccessory(
           this,
           {...context_system, name: 'Outdoor Temperature'},
         );
-        found_accessories.push(accessory.accessory);
       }
 
       // Add system+zone based accessories
@@ -71,7 +71,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
         const context_zone = {...context_system, zone: zone};
         this.log.info(`Discovered zone ${JSON.stringify(context_zone)}`);
         // -> Zone Accessory: Thermostat
-        const accessory = new ThermostatAccessory(
+        new ThermostatAccessory(
           this,
           {
             ...context_zone,
@@ -80,29 +80,27 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
             holdArgument: this.config['holdArgument'],
           },
         );
-        found_accessories.push(accessory.accessory);
         // -> Zone Accessory: Env Sensor
         if (this.config['showIndoorHumiditySensors']) {
-          const accessory = new EnvSensorAccessory(
+          new EnvSensorAccessory(
             this,
             {
               ...context_zone,
               name: `${await system.config.getZoneName(zone)} Environmental Sensor`,
             },
           );
-          found_accessories.push(accessory.accessory);
         }
       }
     }
 
-    const missing_accessories = this.accessories.filter(
-      accessory => !found_accessories.includes(accessory),
-    );
-    missing_accessories.forEach(accessory => {
-      this.log.info(
-        `Removing old device "${accessory.displayName}" (serial:${accessory.context.serialNumber} zone:${accessory.context.zone})`,
-      );
-    });
-    this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, missing_accessories);
+    // Clean up cached accessories that were not discovered from the api
+    for (const id in this.restored_accessories) {
+      if (!this.accessories[id]) {
+        const accessory = this.restored_accessories[id];
+        this.log.info(`[${accessory.context.name}] Removed (stale)`);
+        this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+        delete this.restored_accessories[id];
+      }
+    }
   }
 }
