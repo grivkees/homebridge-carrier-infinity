@@ -55,10 +55,8 @@ export class ThermostatAccessory extends BaseAccessory {
       this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps(bound_props);
       this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).setProps(bound_props);
       this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).setProps(bound_props);
-      this.service.setCharacteristic(
-        this.platform.Characteristic.Name,
-        await this.system_config.getZoneName(this.accessory.context.zone) + ' Thermostat',
-      );
+      // setting name explicitly is needed to not lose the word 'thermostat'
+      this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
     });
     this.system_profile = system.profile;
     this.system_profile.fetch().then(async () => {
