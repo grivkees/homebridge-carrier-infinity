@@ -43,6 +43,8 @@ export abstract class CharacteristicWrapper extends Wrapper {
   protected props = {};
   protected get: (() => Promise<CharacteristicValue>) | undefined;
   protected set: ((value: CharacteristicValue) => Promise<void>) | undefined;
+  // used exclusively if no char value is set yet (first accessory load)
+  protected default_value: CharacteristicValue | null = null;
 
   wrap(service: Service): void {
     const characteristic = service.getCharacteristic(this.ctype);
@@ -58,7 +60,8 @@ export abstract class CharacteristicWrapper extends Wrapper {
           }
         });
         // and return immediately
-        return characteristic.value;
+        // try 1) existing value, if falsy, 2) default value, if null, 3) keep existing value
+        return characteristic.value || this.default_value || characteristic.value;
       });
     }
     if (this.set) {
