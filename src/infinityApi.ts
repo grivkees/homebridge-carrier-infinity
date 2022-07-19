@@ -654,8 +654,8 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
   ): Promise<void> {
     const zone_obj = await this.getZone(zone);
     zone_obj['holdActivity']![0] = activity;
-    zone_obj['hold'][0] = STATUS.ON;
-    zone_obj['otmr'][0] = hold_until || '';
+    zone_obj['hold'][0] = activity ? STATUS.ON : STATUS.OFF;
+    zone_obj['otmr'][0] = activity ? hold_until || '' : '';
   }
 
   async setZoneActivityManualHold(

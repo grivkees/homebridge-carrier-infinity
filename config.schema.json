@@ -55,6 +55,12 @@
         "type": "boolean",
         "default": false,
         "required": true
+      },
+      "showZoneComfortActivityControls": {
+        "title": "Show Per-Zone Touch-n-Go Switches",
+        "type": "boolean",
+        "default": true,
+        "required": true
       }
     }
   },
@@ -89,6 +95,11 @@
           "type": "help",
           "helpvalue": "<h5>Temperature Control</h5><em class='primary-text'>Temperature and mode controls for your thermostats are always shown.</em>"
         },
+        {
+          "type": "help",
+          "helpvalue": "<h5>Activity Control</h5><em class='primary-text'>Show Touch-n-Go controls for comfort activities and manual holds.</em>"
+        },
+        "showZoneComfortActivityControls",
         {
           "type": "help",
           "helpvalue": "<h5>Fan Control</h5><em class='primary-text'>The Fan control is a slider with the following steps: <ol start=0><li>Auto (0%)</li><li>Always On Low (33%)</li><li>Always On Medium (66%)</li><li>Always On High (100%)</li></ol><a href='https://github.com/grivkees/homebridge-carrier-infinity/wiki/Configuration#fan-control'>More details</a>.</em>"
