@@ -10,6 +10,7 @@ import {
 } from './infinityApi';
 import { EnvSensorAccessory } from './accessory_envsensor';
 import { BaseAccessory } from './accessory_base';
+import { ComfortActivityAccessory } from './accessory_comfort_activity';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -87,6 +88,18 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
             {
               ...context_zone,
               name: `${await system.config.getZoneName(zone)} Environmental Sensor`,
+            },
+          );
+        }
+        // -> Zone Accessory: Activity Select Switches
+        if (this.config['showZoneComfortActivityControls']) {
+          new ComfortActivityAccessory(
+            this,
+            {
+              ...context_zone,
+              name: `${await system.config.getZoneName(zone)} Comfort Activity`,
+              holdBehavior: this.config['holdBehavior'],
+              holdArgument: this.config['holdArgument'],
             },
           );
         }
