@@ -94,7 +94,7 @@ class CoolSetpoint extends ThermostatCharacteristicWrapper {
   };
 
   set = async (value: CharacteristicValue) => {
-    return await this.system.config.setZoneActivity(
+    return await this.system.config.setZoneActivityManualHold(
       this.context.zone,
       convertCharTemp2SystemTemp(value, await this.system.config.getUnits()),
       null,
@@ -115,7 +115,7 @@ class HeatSetpoint extends ThermostatCharacteristicWrapper {
   };
 
   set = async (value: CharacteristicValue) => {
-    return await this.system.config.setZoneActivity(
+    return await this.system.config.setZoneActivityManualHold(
       this.context.zone,
       null,
       convertCharTemp2SystemTemp(value, await this.system.config.getUnits()),
@@ -160,14 +160,14 @@ class GeneralSetpoint extends ThermostatCharacteristicWrapper {
     const mode = await this.system.config.getMode();
     switch (mode) {
       case SYSTEM_MODE.COOL:
-        return await this.system.config.setZoneActivity(
+        return await this.system.config.setZoneActivityManualHold(
           this.context.zone,
           svalue,
           null,
           await this.getHoldTime(),
         );
       case SYSTEM_MODE.HEAT:
-        return await this.system.config.setZoneActivity(
+        return await this.system.config.setZoneActivityManualHold(
           this.context.zone,
           null,
           svalue,

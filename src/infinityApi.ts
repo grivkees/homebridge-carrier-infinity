@@ -635,25 +635,52 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     this.data_object.config.mode[0] = mode;
   }
 
-  async setZoneActivity(
+  async setZoneActivityHold(
+    zone: string,
+    activity: string,
+    hold_until: string | null,
+  ): Promise<void> {
+    this.mutations.push(async () => {
+      await this.mutateZoneActivityHold(zone, activity, hold_until);
+    });
+    // Schedule the push event, but don't wait for it to return.
+    this.push();
+  }
+
+  private async mutateZoneActivityHold(
+    zone: string,
+    activity: string,
+    hold_until: string | null,
+  ): Promise<void> {
+    const zone_obj = await this.getZone(zone);
+    zone_obj['holdActivity']![0] = activity;
+    zone_obj['hold'][0] = STATUS.ON;
+    zone_obj['otmr'][0] = hold_until || '';
+  }
+
+  async setZoneActivityManualHold(
     zone: string,
     clsp: number | null,
     htsp: number | null,
     hold_until: string | null,
     fan: string | null = null,
   ): Promise<void> {
+    // Modify MANUAL activity to the requested setpoints
     this.mutations.push(async () => {
-      await this.mutateZoneActivity(zone, clsp, htsp, hold_until, fan);
+      await this.mutateZoneActivityManualHold(zone, clsp, htsp, fan);
+    });
+    // Set hold to MANUAL activity
+    this.mutations.push(async () => {
+      await this.mutateZoneActivityHold(zone, ACTIVITY.MANUAL, hold_until);
     });
     // Schedule the push event, but don't wait for it to return.
     this.push();
   }
 
-  private async mutateZoneActivity(
+  private async mutateZoneActivityManualHold(
     zone: string,
     clsp: number | null,
     htsp: number | null,
-    hold_until: string | null,
     fan: string | null = null,
   ): Promise<void> {
     const zone_obj = await this.getZone(zone);
@@ -668,10 +695,6 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
       manual_activity_obj['htsp'][0] = prev_activity_obj['htsp'][0];
       manual_activity_obj['fan'][0] = prev_activity_obj['fan'][0];
     }
-    // Always set to manual activity
-    zone_obj['holdActivity']![0] = ACTIVITY.MANUAL;
-    zone_obj['hold'][0] = STATUS.ON;
-    zone_obj['otmr'][0] = hold_until || '';
     // Set setpoints on manual activity
     [htsp, clsp] = processSetpointDeadband(
       htsp || parseFloat(manual_activity_obj['htsp'][0]),
