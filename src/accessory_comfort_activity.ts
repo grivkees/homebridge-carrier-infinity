@@ -1,5 +1,5 @@
 import { CarrierInfinityHomebridgePlatform } from './platform';
-import { AccessoryInformation, ThermostatCharacteristicWrapper } from './base';
+import { AccessoryInformation, ThermostatCharacteristicWrapper } from './characteristics_base';
 import { BaseAccessory } from './accessory_base';
 import { ACTIVITY, STATUS } from './infinityApi';
 import { CharacteristicValue, UnknownContext } from 'homebridge';
