@@ -61,6 +61,7 @@ class TargetACState extends ThermostatCharacteristicWrapper {
         return await this.system.config.setMode(SYSTEM_MODE.AUTO);
       default:
         this.log.error(`Don't know how to set target state '${value}'. Report bug: https://bit.ly/3igbU7D`);
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
     }
   };
 }
@@ -178,7 +179,7 @@ class GeneralSetpoint extends ThermostatCharacteristicWrapper {
         return;
       default:
         this.log.error(`Don't know how to set target temp for mode '${mode}'. Report bug: https://bit.ly/3igbU7D`);
-        return;
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
     }
   };
 }

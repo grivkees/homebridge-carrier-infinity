@@ -25,7 +25,7 @@ class Activity extends ThermostatCharacteristicWrapper {
     // Turning off an activity is only allowed for the active activity
     // (otherwise an off on one activity could remove a hold of another)
     if (!value && await this.getActivity() !== this.activity_name) {
-      return;
+      throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
     }
 
     return await this.system.config.setZoneActivityHold(
