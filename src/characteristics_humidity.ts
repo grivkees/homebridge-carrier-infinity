@@ -1,4 +1,4 @@
-import { CharacteristicWrapper, MultiWrapper } from './base';
+import { CharacteristicWrapper, MultiWrapper } from './characteristics_base';
 
 class CurrentRH extends CharacteristicWrapper {
   ctype = this.Characteristic.CurrentRelativeHumidity;

@@ -1,5 +1,5 @@
 import { CarrierInfinityHomebridgePlatform } from './platform';
-import { AccessoryInformation, CharacteristicWrapper, MultiWrapper } from './base';
+import { AccessoryInformation, CharacteristicWrapper, MultiWrapper } from './characteristics_base';
 import { convertSystemTemp2CharTemp } from './helpers';
 import { BaseAccessory } from './accessory_base';
 

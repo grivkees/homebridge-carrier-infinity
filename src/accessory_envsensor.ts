@@ -1,5 +1,5 @@
 import { CarrierInfinityHomebridgePlatform } from './platform';
-import { AccessoryInformation } from './base';
+import { AccessoryInformation } from './characteristics_base';
 import { ThermostatRHService } from './characteristics_humidity';
 import { BaseAccessory } from './accessory_base';
 

@@ -1,4 +1,4 @@
-import { CharacteristicWrapper, MultiWrapper } from './base';
+import { CharacteristicWrapper, MultiWrapper } from './characteristics_base';
 
 class FilterLife extends CharacteristicWrapper {
   ctype = this.Characteristic.FilterLifeLevel;
