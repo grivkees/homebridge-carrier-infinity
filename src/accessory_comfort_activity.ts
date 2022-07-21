@@ -1,7 +1,7 @@
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { AccessoryInformation, ThermostatCharacteristicWrapper } from './base';
 import { BaseAccessory } from './accessory_base';
-import { ACTIVITY } from './infinityApi';
+import { ACTIVITY, STATUS } from './infinityApi';
 import { CharacteristicValue, UnknownContext } from 'homebridge';
 
 class Activity extends ThermostatCharacteristicWrapper {
@@ -37,6 +37,29 @@ class Activity extends ThermostatCharacteristicWrapper {
   };
 }
 
+// HoldActivity works a bit differently. It indicates that a hold of some
+// kind is active. This could be an activity hold, or the 'manual'
+// psudo-activity. To match thermostat behavior, you can't switch directly to
+// the manual activity. Instead activating this switch turns on a hold for the
+// current activity. To hold to the manual activity, just change the temp.
+class HoldActivity extends ThermostatCharacteristicWrapper {
+  ctype = this.Characteristic.On;
+
+  get = async () => {
+    const zone = await this.system.config.getZoneHoldStatus(this.context.zone);
+    return zone[0] === STATUS.ON;
+  };
+
+  set = async (value: CharacteristicValue) => {
+    return await this.system.config.setZoneActivityHold(
+      this.context.zone,
+      // Turning on sets hold for current activity, turning off removes any hold
+      value ? await this.getActivity() : '',
+      await this.getHoldTime(),
+    );
+  };
+}
+
 export class ComfortActivityAccessory extends BaseAccessory {
 
   protected ID(context: Record<string, string>): string {
@@ -49,8 +72,16 @@ export class ComfortActivityAccessory extends BaseAccessory {
   ) {
     super(platform, context);
 
+    // Make this first to make it the primary service and show up first
+    new HoldActivity(this.platform, this.accessory.context).wrap(
+      this.useService(
+        this.platform.Service.Switch,
+        'Manual Hold',
+        'hold',
+      ),
+    );
+
     [
-      ACTIVITY.MANUAL,
       ACTIVITY.WAKE,
       ACTIVITY.AWAY,
       ACTIVITY.HOME,
