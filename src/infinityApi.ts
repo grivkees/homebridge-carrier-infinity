@@ -441,6 +441,11 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     return zone_obj['name'][0];
   }
 
+  async getZoneHoldStatus(zone: string): Promise<[string, string]> {
+    const zone_obj = await this.getZone(zone);
+    return [zone_obj['hold'][0], zone_obj['otmr'][0]];
+  }
+
   async getZoneActivity(zone: string): Promise<string> {
     const zone_obj = await this.getZone(zone);
     if (zone_obj.hold[0] === STATUS.ON) {
