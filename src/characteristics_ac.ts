@@ -106,7 +106,6 @@ class CoolSetpoint extends ThermostatCharacteristicWrapper {
 
 class HeatSetpoint extends ThermostatCharacteristicWrapper {
   ctype = this.Characteristic.HeatingThresholdTemperature;
-  default_value = 10;
 
   get = async () => {
     return convertSystemTemp2CharTemp(

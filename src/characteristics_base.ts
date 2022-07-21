@@ -43,8 +43,6 @@ export abstract class CharacteristicWrapper extends Wrapper {
   protected props = {};
   protected get: (() => Promise<CharacteristicValue>) | undefined;
   protected set: ((value: CharacteristicValue) => Promise<void>) | undefined;
-  // used exclusively if no char value is set yet (first accessory load)
-  protected default_value: CharacteristicValue | null = null;
 
   wrap(service: Service): void {
     const characteristic = service.getCharacteristic(this.ctype);
@@ -53,15 +51,30 @@ export abstract class CharacteristicWrapper extends Wrapper {
     }
     if (this.get) {
       characteristic.onGet(async () => {
-        // schedule characteristic update
-        setImmediate(async () => {
-          if (this.get) {
-            characteristic.updateValue(await this.get());
-          }
-        });
-        // and return immediately
-        // try 1) existing value, if falsy, 2) default value, if null, 3) keep existing value
-        return characteristic.value || this.default_value || characteristic.value;
+        // We already know get exists, this is just to make linter happy.
+        if (!this.get) {
+          return null;
+        }
+
+        // Race the true getter and a timeout
+        const value_promise = this.get();
+        const timeout_promise: Promise<null> = new Promise((_, reject) => setTimeout(reject, 2500)); // hap sends warn at 3 sec
+        const value = await Promise.race([value_promise, timeout_promise]).then(
+          (value) => {
+            return value;
+          },
+        ).catch(
+          () => {
+            // If timed out, wait for the api call in the background instead of blocking further.
+            setImmediate(async () => {
+              characteristic.updateValue(await value_promise);
+            });
+            // And for now return the old value
+            return characteristic.value;
+          },
+        );
+
+        return value;
       });
     }
     if (this.set) {
