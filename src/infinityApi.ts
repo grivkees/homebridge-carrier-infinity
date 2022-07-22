@@ -8,6 +8,7 @@ import { Mutex, tryAcquire, E_ALREADY_LOCKED, E_CANCELED } from 'async-mutex';
 import * as xml2js from 'xml2js';
 import { Logger } from 'homebridge';
 import hash from 'object-hash';
+import EventEmitter from 'events';
 
 export const SYSTEM_MODE = {
   OFF: 'off',
@@ -197,6 +198,7 @@ abstract class BaseInfinityEvolutionApiModel {
   protected data_object_hash?: string;
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
+  public static event_emitter = (new EventEmitter()).setMaxListeners(20);
 
   constructor(
     protected readonly api_connection: InfinityEvolutionApiConnection,
@@ -232,9 +234,17 @@ abstract class BaseInfinityEvolutionApiModel {
   protected async forceFetch(): Promise<void> {
     await this.api_connection.refreshToken();
     try {
+      const old_hash = this.data_object_hash;
       const response = await this.api_connection.axios.get(this.getPath());
       this.data_object = await xml2js.parseStringPromise(response.data);
       this.data_object_hash = this.hashDataObject();
+
+      // If api fetch received changes, let subscribers know
+      if (old_hash !== this.data_object_hash) {
+        this.api_connection.log.info('Feched updates had changes. Updating accessories.');
+        BaseInfinityEvolutionApiModel.event_emitter.emit('has_changes');
+      }
+
     } catch (error) {
       if (Axios.isAxiosError(error)) {
         this.api_connection.log.error('Failed to fetch updates (axios): ', error.message);
@@ -547,7 +557,12 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
       // 1. Do mutations
         const mutated_hash = await this.mutate();
         if (mutated_hash === null) {
+          this.api_connection.log.warn('Config doesn\'t appear to have changed. No changes sent.');
           return;
+        } else {
+          // TODO: move this and the mutation to be immediate.
+          this.api_connection.log.info('Config changed. Pushing changes and updating accessories.');
+          BaseInfinityEvolutionApiModel.event_emitter.emit('has_changes');
         }
         // 2. Push
         await this.forcePush();
@@ -595,9 +610,6 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
 
     // If nothing actually changed, no need to push.
     if (old_hash === mutated_hash) {
-      this.api_connection.log.warn(
-        'Config doesn\'t appear to have changed. No changes sent.',
-      );
       return null;
     }
 
@@ -721,6 +733,7 @@ export class InfinityEvolutionSystemModel {
   public status: InfinityEvolutionSystemStatus;
   public config: InfinityEvolutionSystemConfig;
   public profile: InfinityEvolutionSystemProfile;
+  public event_emitter = BaseInfinityEvolutionApiModel.event_emitter;
 
   constructor(
     protected readonly api_connection: InfinityEvolutionApiConnection,

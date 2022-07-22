@@ -65,17 +65,24 @@ export abstract class CharacteristicWrapper extends Wrapper {
           },
         ).catch(
           () => {
-            // If timed out, wait for the api call in the background instead of blocking further.
-            setImmediate(async () => {
-              characteristic.updateValue(await value_promise);
-            });
-            // And for now return the old value
+            // For now return the old value. Notifier will pick up when promise
+            // completes and update value.
             return characteristic.value;
           },
         );
-
         return value;
       });
+
+      this.system.event_emitter.addListener('has_changes',
+        async () => {
+          // We already know get exists, this is just to make linter happy.
+          if (!this.get) {
+            return null;
+          }
+          // Pass get to update
+          characteristic.updateValue(await this.get());
+        },
+      );
     }
     if (this.set) {
       characteristic.onSet(this.set.bind(this));
