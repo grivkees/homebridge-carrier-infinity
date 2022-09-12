@@ -31,7 +31,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     public readonly api: API,
   ) {
     if (!config.username || !config.password) {
-      this.log.warn('Username and password do not appear to be set in config. This is not going to work.');
+      this.log.error('Username and password do not appear to be set in config. This is not going to work.');
     }
 
     this.api_connection = new InfinityEvolutionApiConnection(config['username'], config['password'], this.log);
@@ -57,7 +57,8 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
 
       // Add system based accessories
       const context_system = {serialNumber: system.serialNumber};
-      this.log.info(`Discovered system ${JSON.stringify(context_system)}}`);
+      const log_prefix = `[${context_system.serialNumber}] `;
+      this.log.info(log_prefix + 'Discovered system');
       // -> System Accessory: Outdoor Temp Sensor
       if (this.config['showOutdoorTemperatureSensor']) {
         new OutdoorTemperatureAccessory(
@@ -70,7 +71,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       const zones = await system.profile.getZones();
       for (const zone of zones) {  // 'of' makes sure we go through zone ids, not index
         const context_zone = {...context_system, zone: zone};
-        this.log.info(`Discovered zone ${JSON.stringify(context_zone)}`);
+        this.log.info(log_prefix + `Discovered zone ${context_zone.zone}`);
         // -> Zone Accessory: Thermostat
         new ThermostatAccessory(
           this,
@@ -110,7 +111,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     for (const id in this.restored_accessories) {
       if (!this.accessories[id]) {
         const accessory = this.restored_accessories[id];
-        this.log.info(`[${accessory.context.name}] Removed (stale)`);
+        this.log.info(`[${accessory.context.serialNumber} ${accessory.context.name}] Removed (stale)`);
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         delete this.restored_accessories[id];
       }

@@ -4,20 +4,22 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 
 export abstract class BaseAccessory {
   public readonly accessory: PlatformAccessory;
+  public readonly log_prefix: string;
 
   constructor(
     protected readonly platform: CarrierInfinityHomebridgePlatform,
     context: Record<string, string>,
   ) {
+    this.log_prefix = `[${context.serialNumber} ${context.name}] `;
     const uuid = this.platform.api.hap.uuid.generate(this.ID(context));
     let accessory = this.platform.restored_accessories[uuid];
     if (!accessory) {
-      this.platform.log.info(`[${context.name}] Added`);
+      this.platform.log.info(this.log_prefix + 'Added');
       accessory = new this.platform.api.platformAccessory(context.name, uuid);
       accessory.context = context;
       this.platform.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
     } else {
-      this.platform.log.info(`[${context.name}] Loaded`);
+      this.platform.log.info(this.log_prefix + 'Loaded');
       accessory.context = context;
       this.platform.api.updatePlatformAccessories([accessory]);
     }

@@ -179,12 +179,13 @@ export class InfinityEvolutionApiConnection {
     } catch (error) {
       if (Axios.isAxiosError(error)) {
         this.log.error(
+          '[API] ',
           'Could not refresh api access token: ', error.message,
           '\nStatus: ', error.response?.status,
           '\nData: ', error.response?.data,
         );
       } else {
-        this.log.error('Could not refresh api access token: ', error);
+        this.log.error('[API] Could not refresh api access token: ', error);
       }
     }
   }
@@ -224,7 +225,7 @@ abstract class BaseInfinityEvolutionApiModel {
       });
     } catch (e) {
       if (e !== E_ALREADY_LOCKED) {
-        this.api_connection.log.error(`Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
+        this.api_connection.log.error(`[API] Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
       }
     }
   }
@@ -237,9 +238,9 @@ abstract class BaseInfinityEvolutionApiModel {
       this.data_object_hash = this.hashDataObject();
     } catch (error) {
       if (Axios.isAxiosError(error)) {
-        this.api_connection.log.error('Failed to fetch updates (axios): ', error.message);
+        this.api_connection.log.error('[API] Failed to fetch updates (axios): ', error.message);
       } else {
-        this.api_connection.log.error('Failed to fetch updates (unknown): ', error);
+        this.api_connection.log.error('[API] Failed to fetch updates (unknown): ', error);
       }
     }
   }
@@ -557,14 +558,14 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
         await new Promise(r => setTimeout(r, 5000));
         await this.forceFetch();
         if (mutated_hash === this.data_object_hash) {
-          this.api_connection.log.info('Changes sent to carrier api successfully.');
+          this.api_connection.log.info('[API] Changes sent to carrier api successfully.');
         } else {
-          this.api_connection.log.warn('Changes may not have successfully propagated to the carrier api.');
+          this.api_connection.log.warn('[API] Changes may not have successfully propagated to the carrier api.');
         }
       });
     } catch (e) {
       if (e !== E_CANCELED) {
-        this.api_connection.log.error(`Deadlock on push ${e}. Report bug: https://bit.ly/3igbU7D`);
+        this.api_connection.log.error(`[API] Deadlock on push ${e}. Report bug: https://bit.ly/3igbU7D`);
       }
     }
   }
@@ -580,7 +581,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     await this.forceFetch();
     if (old_hash !== this.data_object_hash) {
       this.api_connection.log.warn(
-        'Cached config was stale before mutation and push.',
+        '[API] Cached config was stale before mutation and push.',
       );
     }
 
@@ -598,7 +599,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     // If nothing actually changed, no need to push.
     if (old_hash === mutated_hash) {
       this.api_connection.log.warn(
-        'Config doesn\'t appear to have changed. No changes sent.',
+        '[API] Config doesn\'t appear to have changed. No changes sent.',
       );
       return null;
     }
@@ -607,7 +608,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
   }
 
   private async forcePush(): Promise<void> {
-    this.api_connection.log.info('Pushing changes to carrier api...');
+    this.api_connection.log.info('[API] Pushing changes to carrier api...');
     const builder = new xml2js.Builder();
     const new_xml = builder.buildObject(this.data_object);
     const data = `data=${encodeURIComponent(new_xml)}`;
@@ -623,9 +624,9 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
       );
     } catch (error) {
       if (Axios.isAxiosError(error)) {
-        this.api_connection.log.error('Failed to push updates (axios): ', error.message);
+        this.api_connection.log.error('[API] Failed to push updates (axios): ', error.message);
       } else {
-        this.api_connection.log.error('Failed to push updates (unknown): ', error);
+        this.api_connection.log.error('[API] Failed to push updates (unknown): ', error);
       }
     }
   }
