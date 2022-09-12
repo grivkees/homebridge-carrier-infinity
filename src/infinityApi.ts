@@ -363,9 +363,11 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     switch(raw_mode) {
       case 'active_heat':
       case 'prep_heat':
+      case 'pending_heat':
         return SYSTEM_MODE.HEAT;
       case 'active_cool':
       case 'prep_cool':
+      case 'pending_cool':
         return SYSTEM_MODE.COOL;
       case 'idle':
         return SYSTEM_MODE.OFF;
