@@ -57,9 +57,9 @@
         "required": true
       },
       "showZoneComfortActivityControls": {
-        "title": "Show Per-Zone Touch-n-Go Switches",
+        "title": "Show Per-Zone Touch-n-Go Switches [beta]",
         "type": "boolean",
-        "default": true,
+        "default": false,
         "required": true
       }
     }
