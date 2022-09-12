@@ -255,7 +255,7 @@ export class InfinityEvolutionLocations extends BaseInfinityEvolutionApiModel {
     await this.fetch();
     const systems: string[] = [];
     for (const location of this.data_object.locations.location) {
-      for (const system of location.systems[0].system) {
+      for (const system of location.systems[0].system || []) {
         const link_parts = system['atom:link'][0]['$']['href'].split('/');
         systems.push(link_parts[link_parts.length - 1]);
       }
