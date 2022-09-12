@@ -16,7 +16,7 @@ class CurrentACStatus extends ThermostatCharacteristicWrapper {
       case SYSTEM_MODE.HEAT:
         return this.Characteristic.CurrentHeatingCoolingState.HEAT;
       default:
-        this.log.error(`Unknown current state '${current_state}'. Report bug: https://bit.ly/3igbU7D`);
+        this.log.error(this.log_prefix + `Unknown current state '${current_state}'. Report bug: https://bit.ly/3igbU7D`);
         return this.Characteristic.CurrentHeatingCoolingState.OFF;
     }
   };
@@ -37,7 +37,7 @@ class TargetACState extends ThermostatCharacteristicWrapper {
       case SYSTEM_MODE.AUTO:
         return this.Characteristic.TargetHeatingCoolingState.AUTO;
       default:
-        this.log.error(`Unknown target state '${target_state}'. Report bug: https://bit.ly/3igbU7D`);
+        this.log.error(this.log_prefix + `Unknown target state '${target_state}'. Report bug: https://bit.ly/3igbU7D`);
         return this.Characteristic.TargetHeatingCoolingState.OFF;
     }
   };
@@ -60,7 +60,7 @@ class TargetACState extends ThermostatCharacteristicWrapper {
       case this.Characteristic.TargetHeatingCoolingState.AUTO:
         return await this.system.config.setMode(SYSTEM_MODE.AUTO);
       default:
-        this.log.error(`Don't know how to set target state '${value}'. Report bug: https://bit.ly/3igbU7D`);
+        this.log.error(this.log_prefix + `Don't know how to set target state '${value}'. Report bug: https://bit.ly/3igbU7D`);
     }
   };
 }
@@ -177,7 +177,7 @@ class GeneralSetpoint extends ThermostatCharacteristicWrapper {
         // For auto mode, Cool/Heat setpoints are used
         return;
       default:
-        this.log.error(`Don't know how to set target temp for mode '${mode}'. Report bug: https://bit.ly/3igbU7D`);
+        this.log.error(this.log_prefix + `Don't know how to set target temp for mode '${mode}'. Report bug: https://bit.ly/3igbU7D`);
         return;
     }
   };

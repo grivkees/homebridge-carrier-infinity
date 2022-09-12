@@ -13,11 +13,14 @@ class Wrapper {
   public readonly Characteristic: typeof Characteristic = this.platform.api.hap.Characteristic;
   protected readonly system: InfinityEvolutionSystemModel = this.platform.systems[this.context.serialNumber];
   protected readonly log: Logger = this.platform.log;
+  public readonly log_prefix: string;
 
   constructor(
     public readonly platform: CarrierInfinityHomebridgePlatform,
     protected readonly context: UnknownContext,
-  ) {}
+  ) {
+    this.log_prefix = `[${context.serialNumber} ${context.name}] `;
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   wrap(service: Service): void {
