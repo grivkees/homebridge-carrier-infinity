@@ -139,7 +139,7 @@ export class InfinityEvolutionApiConnection {
         Accept: 'application/xml',
       },
     });
-    // Axios logging for debugging
+    // Axios debug logging and error handling
     this.axios.interceptors.response.use(
       // Success
       response => {
@@ -156,7 +156,7 @@ export class InfinityEvolutionApiConnection {
           `${error.response.status} ${error.response.statusText}`,
         );
         this.log.debug(error.response.data);
-        return error;
+        return Promise.reject(error); // this makes http errors raise
       },
     );
     // Oauth header add
@@ -170,7 +170,10 @@ export class InfinityEvolutionApiConnection {
     try {
       await this.forceRefreshToken();
     } catch (error) {
-      this.log.error(`[API] Could not refresh api access token: ${error}`);
+      this.log.error(
+        '[API] Could not refresh access token: ',
+        Axios.isAxiosError(error) ? error.message : error,
+      );
     }
   }
 
@@ -212,7 +215,7 @@ abstract class BaseInfinityEvolutionApiModel {
   protected data_object_hash?: string;
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
-  protected log: Logger = this.api_connection.log;
+  protected log: Logger = new PrefixLogger(this.api_connection.log, 'API');
 
   constructor(
     protected readonly api_connection: InfinityEvolutionApiConnection,
@@ -249,14 +252,18 @@ abstract class BaseInfinityEvolutionApiModel {
     await this.api_connection.refreshToken();
     try {
       const response = await this.api_connection.axios.get(this.getPath());
-      this.data_object = await xml2js.parseStringPromise(response.data);
-      this.data_object_hash = this.hashDataObject();
-    } catch (error) {
-      if (Axios.isAxiosError(error)) {
-        this.log.error('Failed to fetch updates (axios): ', error.message);
+      if (response.data) {
+        this.data_object = await xml2js.parseStringPromise(response.data);
+        this.data_object_hash = this.hashDataObject();
       } else {
-        this.log.error('Failed to fetch updates (unknown): ', error);
+        this.log.debug(response.data);
+        throw new Error('Response from API contained errors.');
       }
+    } catch (error) {
+      this.log.error(
+        'Failed to fetch updates: ',
+        Axios.isAxiosError(error) ? error.message : error,
+      );
     }
   }
 }
@@ -635,11 +642,10 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
         },
       );
     } catch (error) {
-      if (Axios.isAxiosError(error)) {
-        this.log.error('Failed to push updates (axios): ', error.message);
-      } else {
-        this.log.error('Failed to push updates (unknown): ', error);
-      }
+      this.log.error(
+        'Failed to push updates: ',
+        Axios.isAxiosError(error) ? error.message : error,
+      );
     }
   }
 
