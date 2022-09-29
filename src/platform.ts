@@ -57,8 +57,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
 
       // Add system based accessories
       const context_system = {serialNumber: system.serialNumber};
-      const log_prefix = `[${context_system.serialNumber}] `;
-      this.log.info(log_prefix + 'Discovered system');
+      system.log.info('Discovered system');
       // -> System Accessory: Outdoor Temp Sensor
       if (this.config['showOutdoorTemperatureSensor']) {
         new OutdoorTemperatureAccessory(
@@ -71,7 +70,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       const zones = await system.profile.getZones();
       for (const zone of zones) {  // 'of' makes sure we go through zone ids, not index
         const context_zone = {...context_system, zone: zone};
-        this.log.info(log_prefix + `Discovered zone ${context_zone.zone}`);
+        system.log.debug(`Discovered zone ${context_zone.zone}`);
         // -> Zone Accessory: Thermostat
         new ThermostatAccessory(
           this,
@@ -111,7 +110,8 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     for (const id in this.restored_accessories) {
       if (!this.accessories[id]) {
         const accessory = this.restored_accessories[id];
-        this.log.info(`[${accessory.context.serialNumber} ${accessory.context.name}] Removed (stale)`);
+        // TODO Use different logger
+        this.log.info(`[${accessory.context.serialNumber}] [${accessory.context.name}] Removed (stale)`);
         this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
         delete this.restored_accessories[id];
       }

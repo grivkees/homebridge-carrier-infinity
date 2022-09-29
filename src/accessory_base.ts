@@ -1,25 +1,27 @@
-import { PlatformAccessory, Service, WithUUID } from 'homebridge';
+import { Logger, PlatformAccessory, Service, WithUUID } from 'homebridge';
+import { PrefixLogger } from './helper_logging';
+import { InfinityEvolutionSystemModel } from './infinityApi';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 
 export abstract class BaseAccessory {
   public readonly accessory: PlatformAccessory;
-  public readonly log_prefix: string;
+  protected readonly system: InfinityEvolutionSystemModel = this.platform.systems[this.context.serialNumber];
+  protected readonly log: Logger = new PrefixLogger(this.system.log, this.context.name);
 
   constructor(
     protected readonly platform: CarrierInfinityHomebridgePlatform,
-    context: Record<string, string>,
+    protected readonly context: Record<string, string>,
   ) {
-    this.log_prefix = `[${context.serialNumber} ${context.name}] `;
     const uuid = this.platform.api.hap.uuid.generate(this.ID(context));
     let accessory = this.platform.restored_accessories[uuid];
     if (!accessory) {
-      this.platform.log.info(this.log_prefix + 'Added');
+      this.log.info('Added');
       accessory = new this.platform.api.platformAccessory(context.name, uuid);
       accessory.context = context;
       this.platform.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
     } else {
-      this.platform.log.info(this.log_prefix + 'Loaded');
+      this.log.info('Loaded');
       accessory.context = context;
       this.platform.api.updatePlatformAccessories([accessory]);
     }

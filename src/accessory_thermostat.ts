@@ -32,7 +32,6 @@ export class ThermostatAccessory extends BaseAccessory {
     context: Record<string, string>,
   ) {
     super(platform, context);
-    const system = this.platform.systems[this.accessory.context.serialNumber];
     // Create services
     this.accessory.getService(this.platform.Service.AccessoryInformation)!
       .setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.context.serialNumber);
@@ -42,9 +41,9 @@ export class ThermostatAccessory extends BaseAccessory {
     );
 
     // Create accessory api bridge
-    this.system_status = system.status;
+    this.system_status = this.system.status;
     this.system_status.fetch().then();
-    this.system_config = system.config;
+    this.system_config = this.system.config;
     this.system_config.fetch().then(async () => {
       this.service.setCharacteristic(this.platform.Characteristic.Name, await this.system_config.getZoneName(this.accessory.context.zone));
       const temp_bounds = await this.system_config.getTempBounds();
@@ -58,7 +57,7 @@ export class ThermostatAccessory extends BaseAccessory {
       // setting name explicitly is needed to not lose the word 'thermostat'
       this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
     });
-    this.system_profile = system.profile;
+    this.system_profile = this.system.profile;
     this.system_profile.fetch().then(async () => {
       this.accessory.getService(this.platform.Service.AccessoryInformation)!
         .setCharacteristic(this.platform.Characteristic.Manufacturer, `${await this.system_profile.getBrand()} Home`)
