@@ -3,6 +3,7 @@ import { Service, Characteristic, Logger } from 'homebridge';
 import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
 
 import { CarrierInfinityHomebridgePlatform } from './platform';
+import { PrefixLogger } from './helper_logging';
 
 /*
 * Helpers to add handlers to the HAP Service and Characteristic objects.
@@ -12,15 +13,12 @@ class Wrapper {
   public readonly Service: typeof Service = this.platform.api.hap.Service;
   public readonly Characteristic: typeof Characteristic = this.platform.api.hap.Characteristic;
   protected readonly system: InfinityEvolutionSystemModel = this.platform.systems[this.context.serialNumber];
-  protected readonly log: Logger = this.platform.log;
-  public readonly log_prefix: string;
+  protected readonly log: Logger = new PrefixLogger(this.system.log, this.context.name);
 
   constructor(
     public readonly platform: CarrierInfinityHomebridgePlatform,
     protected readonly context: UnknownContext,
-  ) {
-    this.log_prefix = `[${context.serialNumber} ${context.name}] `;
-  }
+  ) {}
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   wrap(service: Service): void {

@@ -8,6 +8,7 @@ import { Mutex, tryAcquire, E_ALREADY_LOCKED, E_CANCELED } from 'async-mutex';
 import * as xml2js from 'xml2js';
 import { Logger } from 'homebridge';
 import hash from 'object-hash';
+import { PrefixLogger } from './helper_logging';
 
 export const SYSTEM_MODE = {
   OFF: 'off',
@@ -198,6 +199,7 @@ abstract class BaseInfinityEvolutionApiModel {
   protected data_object_hash?: string;
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
+  protected log: Logger = this.api_connection.log;
 
   constructor(
     protected readonly api_connection: InfinityEvolutionApiConnection,
@@ -225,7 +227,7 @@ abstract class BaseInfinityEvolutionApiModel {
       });
     } catch (e) {
       if (e !== E_ALREADY_LOCKED) {
-        this.api_connection.log.error(`[API] Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
+        this.log.error(`Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
       }
     }
   }
@@ -238,9 +240,9 @@ abstract class BaseInfinityEvolutionApiModel {
       this.data_object_hash = this.hashDataObject();
     } catch (error) {
       if (Axios.isAxiosError(error)) {
-        this.api_connection.log.error('[API] Failed to fetch updates (axios): ', error.message);
+        this.log.error('Failed to fetch updates (axios): ', error.message);
       } else {
-        this.api_connection.log.error('[API] Failed to fetch updates (unknown): ', error);
+        this.log.error('Failed to fetch updates (unknown): ', error);
       }
     }
   }
@@ -271,6 +273,7 @@ abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolution
   constructor(
     protected readonly api_connection: InfinityEvolutionApiConnection,
     public readonly serialNumber: string,
+    protected readonly log: Logger,
   ) {
     super(api_connection);
   }
@@ -558,14 +561,14 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
         await new Promise(r => setTimeout(r, 5000));
         await this.forceFetch();
         if (mutated_hash === this.data_object_hash) {
-          this.api_connection.log.info('[API] Changes sent to carrier api successfully.');
+          this.log.info('Changes sent to carrier api successfully.');
         } else {
-          this.api_connection.log.warn('[API] Changes may not have successfully propagated to the carrier api.');
+          this.log.warn('Changes may not have successfully propagated to the carrier api.');
         }
       });
     } catch (e) {
       if (e !== E_CANCELED) {
-        this.api_connection.log.error(`[API] Deadlock on push ${e}. Report bug: https://bit.ly/3igbU7D`);
+        this.log.error(`Deadlock on push ${e}. Report bug: https://bit.ly/3igbU7D`);
       }
     }
   }
@@ -580,9 +583,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     const old_hash = this.data_object_hash;
     await this.forceFetch();
     if (old_hash !== this.data_object_hash) {
-      this.api_connection.log.warn(
-        '[API] Cached config was stale before mutation and push.',
-      );
+      this.log.warn('Cached config was stale before mutation and push.');
     }
 
     // Take config mutations of the queue and run them.
@@ -598,9 +599,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
 
     // If nothing actually changed, no need to push.
     if (old_hash === mutated_hash) {
-      this.api_connection.log.warn(
-        '[API] Config doesn\'t appear to have changed. No changes sent.',
-      );
+      this.log.warn('Config doesn\'t appear to have changed. No changes sent.');
       return null;
     }
 
@@ -608,7 +607,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
   }
 
   private async forcePush(): Promise<void> {
-    this.api_connection.log.info('[API] Pushing changes to carrier api...');
+    this.log.info('Pushing changes to carrier api...');
     const builder = new xml2js.Builder();
     const new_xml = builder.buildObject(this.data_object);
     const data = `data=${encodeURIComponent(new_xml)}`;
@@ -624,9 +623,9 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
       );
     } catch (error) {
       if (Axios.isAxiosError(error)) {
-        this.api_connection.log.error('[API] Failed to push updates (axios): ', error.message);
+        this.log.error('Failed to push updates (axios): ', error.message);
       } else {
-        this.api_connection.log.error('[API] Failed to push updates (unknown): ', error);
+        this.log.error('Failed to push updates (unknown): ', error);
       }
     }
   }
@@ -724,22 +723,27 @@ export class InfinityEvolutionSystemModel {
   public status: InfinityEvolutionSystemStatus;
   public config: InfinityEvolutionSystemConfig;
   public profile: InfinityEvolutionSystemProfile;
+  public log: Logger = new PrefixLogger(this.api_connection.log, this.serialNumber);
 
   constructor(
     protected readonly api_connection: InfinityEvolutionApiConnection,
     public readonly serialNumber: string,
   ) {
+    const api_logger = new PrefixLogger(this.log, 'API');
     this.status = new InfinityEvolutionSystemStatus(
       api_connection,
       serialNumber,
+      api_logger,
     );
     this.config = new InfinityEvolutionSystemConfig(
       api_connection,
       serialNumber,
+      api_logger,
     );
     this.profile = new InfinityEvolutionSystemProfile(
       api_connection,
       serialNumber,
+      api_logger,
     );
   }
 }
