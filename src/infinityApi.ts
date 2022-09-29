@@ -658,6 +658,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
   }
 
   private mutateMode(mode: string): void {
+    this.log.debug('Setting mode to ' + mode);
     this.data_object.config.mode[0] = mode;
   }
 
@@ -678,6 +679,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     activity: string,
     hold_until: string | null,
   ): Promise<void> {
+    this.log.debug(`Setting zone ${zone} activity to ${activity} until ${hold_until}`);
     const zone_obj = await this.getZone(zone);
     zone_obj['holdActivity']![0] = activity;
     zone_obj['hold'][0] = activity ? STATUS.ON : STATUS.OFF;
@@ -709,6 +711,13 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     htsp: number | null,
     fan: string | null = null,
   ): Promise<void> {
+    this.log.debug(
+      `Setting zone ${zone} to`,
+      clsp ? `clsp=${clsp}` : '',
+      htsp ? `htsp=${htsp}` : '',
+      fan ? `fan=${fan}` : '',
+      '.',
+    );
     const zone_obj = await this.getZone(zone);
     // When moving to manual activity, default to prev activity settings.
     const manual_activity_obj = await this.getZoneActivityConfig(zone, ACTIVITY.MANUAL);
