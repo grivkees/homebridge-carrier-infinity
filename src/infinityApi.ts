@@ -245,6 +245,7 @@ abstract class BaseInfinityEvolutionApiModel {
       if (e !== E_ALREADY_LOCKED) {
         this.log.error(`Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
       }
+      throw e;
     }
   }
 
@@ -577,19 +578,21 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
         }
         // 2. Push
         await this.forcePush();
+        this.log.info('... pushing changes complete.');
         // 3. Confirm
         await new Promise(r => setTimeout(r, 5000));
         await this.forceFetch();
         if (mutated_hash === this.data_object_hash) {
-          this.log.info('Changes sent to carrier api successfully.');
+          this.log.debug('Successful propagation to carrier api is confirmed.');
         } else {
-          this.log.warn('Changes may not have successfully propagated to the carrier api.');
+          this.log.warn('Changes do not (yet?) appear to have propagated to the carrier api.');
         }
       });
     } catch (e) {
       if (e !== E_CANCELED) {
         this.log.error(`Deadlock on push ${e}. Report bug: https://bit.ly/3igbU7D`);
       }
+      throw e;
     }
   }
 
