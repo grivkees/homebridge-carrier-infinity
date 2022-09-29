@@ -4,7 +4,7 @@ import { INFINITY_API_BASE_URL, INFINITY_API_CONSUMER_KEY, INFINITY_API_CONSUMER
 import Axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import oauthSignature from 'oauth-signature';
 import { MemoizeExpiring } from 'typescript-memoize';
-import { Mutex, tryAcquire, E_ALREADY_LOCKED, E_CANCELED } from 'async-mutex';
+import { Mutex, tryAcquire, E_ALREADY_LOCKED, E_CANCELED, E_TIMEOUT } from 'async-mutex';
 import * as xml2js from 'xml2js';
 import { Logger } from 'homebridge';
 import hash from 'object-hash';
@@ -242,29 +242,28 @@ abstract class BaseInfinityEvolutionApiModel {
         await this.forceFetch();
       });
     } catch (e) {
-      if (e !== E_ALREADY_LOCKED) {
+      if (e === E_ALREADY_LOCKED) {
+        return;
+      } else if (e === E_TIMEOUT || e === E_CANCELED) {
         this.log.error(`Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
+      } else {
+        this.log.error(
+          'Failed to fetch updates: ',
+          Axios.isAxiosError(e) ? e.message : e,
+        );
       }
-      throw e;
     }
   }
 
   protected async forceFetch(): Promise<void> {
     await this.api_connection.refreshToken();
-    try {
-      const response = await this.api_connection.axios.get(this.getPath());
-      if (response.data) {
-        this.data_object = await xml2js.parseStringPromise(response.data);
-        this.data_object_hash = this.hashDataObject();
-      } else {
-        this.log.debug(response.data);
-        throw new Error('Response from API contained errors.');
-      }
-    } catch (error) {
-      this.log.error(
-        'Failed to fetch updates: ',
-        Axios.isAxiosError(error) ? error.message : error,
-      );
+    const response = await this.api_connection.axios.get(this.getPath());
+    if (response.data) {
+      this.data_object = await xml2js.parseStringPromise(response.data);
+      this.data_object_hash = this.hashDataObject();
+    } else {
+      this.log.debug(response.data);
+      throw new Error('Response from API contained errors.');
     }
   }
 }
@@ -589,10 +588,16 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
         }
       });
     } catch (e) {
-      if (e !== E_CANCELED) {
+      if (e === E_CANCELED) {
+        return;
+      } else if (e === E_TIMEOUT || e === E_ALREADY_LOCKED) {
         this.log.error(`Deadlock on push ${e}. Report bug: https://bit.ly/3igbU7D`);
+      } else {
+        this.log.error(
+          'Failed to push updates: ',
+          Axios.isAxiosError(e) ? e.message : e,
+        );
       }
-      throw e;
     }
   }
 
@@ -634,22 +639,15 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     const builder = new xml2js.Builder();
     const new_xml = builder.buildObject(this.data_object);
     const data = `data=${encodeURIComponent(new_xml)}`;
-    try {
-      await this.api_connection.axios.post(
-        this.getPath(),
-        data,
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
+    await this.api_connection.axios.post(
+      this.getPath(),
+      data,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-      );
-    } catch (error) {
-      this.log.error(
-        'Failed to push updates: ',
-        Axios.isAxiosError(error) ? error.message : error,
-      );
-    }
+      },
+    );
   }
 
   async setMode(mode: string): Promise<void> {
