@@ -139,16 +139,43 @@ export class InfinityEvolutionApiConnection {
         Accept: 'application/xml',
       },
     });
-    this.axios.interceptors.request.use(config => OAuthHeaders.intercept(config, this.username, this.token));
+    // Axios logging for debugging
+    this.axios.interceptors.response.use(
+      // Success
+      response => {
+        this.log.debug(
+          `${response.request?.method} ${response.request.host}${response.request?.path}`,
+          `${response.status} ${response.statusText}`,
+        );
+        return response;
+      },
+      // Failure
+      error => {
+        this.log.debug(
+          `${error.request?.method} ${error.request.host}${error.request?.path}`,
+          `${error.response.status} ${error.response.statusText}`,
+        );
+        this.log.debug(error.response.data);
+        return error;
+      },
+    );
+    // Oauth header add
+    this.axios.interceptors.request.use(config => {
+      return OAuthHeaders.intercept(config, this.username, this.token);
+    });
   }
 
   @MemoizeExpiring(24 * 60 * 60 * 1000) // every 24 hrs
   async refreshToken(): Promise<void> {
-    await this.forceRefreshToken();
+    try {
+      await this.forceRefreshToken();
+    } catch (error) {
+      this.log.error(`[API] Could not refresh api access token: ${error}`);
+    }
   }
 
   // TODO: on some api errors, force a refresh
-  private async forceRefreshToken(): Promise<void> {
+  async forceRefreshToken(): Promise<void> {
     const builder = new xml2js.Builder({cdata: true, headless: true});
     const new_xml = builder.buildObject({
       credentials: {
@@ -158,36 +185,22 @@ export class InfinityEvolutionApiConnection {
     });
     const data = `data=${encodeURIComponent(new_xml)}`;
 
-    try {
-      const response = await this.axios.post(
-        '/users/authenticated',
-        data,
-        {
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            Accept: 'application/json',
-          },
+    const response = await this.axios.post(
+      '/users/authenticated',
+      data,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Accept: 'application/json',
         },
-      );
+      },
+    );
 
-      if (response.data.error) {
-        throw new Error('API returned error on status 2xx: ' + JSON.stringify(response.data));
-      } else if (response.data.result) {
-        this.token = response.data.result.accessToken;
-      } else {
-        throw new Error('Could not find refreshed api access token: ' + JSON.stringify(response.data));
-      }
-    } catch (error) {
-      if (Axios.isAxiosError(error)) {
-        this.log.error(
-          '[API] ',
-          'Could not refresh api access token: ', error.message,
-          '\nStatus: ', error.response?.status,
-          '\nData: ', error.response?.data,
-        );
-      } else {
-        this.log.error('[API] Could not refresh api access token: ', error);
-      }
+    if (response.data.result?.accessToken) {
+      this.token = response.data.result.accessToken;
+    } else {
+      this.log.debug(response.data);
+      throw new Error('User authentication error.');
     }
   }
 }
