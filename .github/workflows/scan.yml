@@ -1,12 +1,11 @@
 name: "Scan"
 
 on:
-  push:
-    branches: [master]
   pull_request:
     branches: [master]
   schedule:
     - cron: '30 17 * * 2'
+  workflow_call:
 
 jobs:
   codeql:
@@ -18,17 +17,15 @@ jobs:
       security-events: write
     strategy:
       fail-fast: false
-      matrix:
-        language: [ 'javascript' ]
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v1
+      uses: github/codeql-action/init@v2
       with:
-        languages: ${{ matrix.language }}
+        languages: javascript
     - name: Perform CodeQL analysis
-      uses: github/codeql-action/analyze@v1
+      uses: github/codeql-action/analyze@v2
   njsscan:
     name: njsscan code scanning
     runs-on: ubuntu-latest
@@ -38,13 +35,13 @@ jobs:
       security-events: write
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
     - name: Perform nodejsscan scan
       id: njsscan
       uses: ajinabraham/njsscan-action@master
       with:
         args: '. --sarif --output results.sarif || true'
     - name: Upload njsscan report
-      uses: github/codeql-action/upload-sarif@v1
+      uses: github/codeql-action/upload-sarif@v2
       with:
         sarif_file: results.sarif
