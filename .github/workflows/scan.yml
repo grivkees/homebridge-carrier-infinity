@@ -1,11 +1,12 @@
 name: "Scan"
 
 on:
+  push:
+    branches: [master]
   pull_request:
     branches: [master]
   schedule:
     - cron: '30 17 * * 2'
-  workflow_call:
 
 jobs:
   codeql:
@@ -26,6 +27,7 @@ jobs:
         languages: javascript
     - name: Perform CodeQL analysis
       uses: github/codeql-action/analyze@v2
+
   njsscan:
     name: njsscan code scanning
     runs-on: ubuntu-latest

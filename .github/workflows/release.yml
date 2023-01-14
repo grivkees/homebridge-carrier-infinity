@@ -8,10 +8,8 @@ on:
 jobs:
   build:
     uses: ./.github/workflows/build.yml
-  scan:
-    uses: ./.github/workflows/scan.yml
   release:
-    needs: [build, scan]
+    needs: [build]
     runs-on: ubuntu-latest
     environment: Release
     steps:
