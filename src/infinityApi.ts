@@ -165,6 +165,31 @@ export class InfinityEvolutionApiConnection {
     });
   }
 
+  // Api seems to expect this every min or so. more frequent doesn't seem to
+  // make any difference.
+  @MemoizeExpiring(1 * 60 * 1000)
+  async activate(): Promise<void> {
+    try {
+      await this.forceRefreshToken();
+    } catch (error) {
+      this.log.error(
+        '[API] Failure sending activation signal: ',
+        Axios.isAxiosError(error) ? error.message : error,
+      );
+    }
+  }
+
+  async forceActivate(): Promise<void> {
+    await this.axios.post(
+      `/users/${this.username}/activateSystems`,
+      {
+        headers: {
+          Accept: 'application/json',
+        },
+      },
+    );
+  }
+
   @MemoizeExpiring(24 * 60 * 60 * 1000) // every 24 hrs
   async refreshToken(): Promise<void> {
     try {
@@ -257,6 +282,7 @@ abstract class BaseInfinityEvolutionApiModel {
 
   protected async forceFetch(): Promise<void> {
     await this.api_connection.refreshToken();
+    await this.api_connection.activate();
     const response = await this.api_connection.axios.get(this.getPath());
     if (response.data) {
       this.data_object = await xml2js.parseStringPromise(response.data);
@@ -301,7 +327,9 @@ abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolution
   protected async forceFetch(): Promise<void> {
     await super.forceFetch();
     const top_level_key = Object.keys(this.data_object)[0];
-    this.last_updated = Date.parse(this.data_object[top_level_key].timestamp[0]);
+    const ts = this.data_object[top_level_key].timestamp[0];
+    this.last_updated = Date.parse(ts);
+    this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_updated})`);
   }
 }
 
