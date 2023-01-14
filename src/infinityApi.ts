@@ -151,11 +151,12 @@ export class InfinityEvolutionApiConnection {
       },
       // Failure
       error => {
-        this.log.debug(
-          `${error.request?.method} ${error.request.host}${error.request?.path}`,
-          `${error.response.status} ${error.response.statusText}`,
-        );
-        this.log.debug(error.response.data);
+        if (Axios.isAxiosError(error)) {
+          this.log.debug(
+            `${error.request?.method} ${error.request?.host}${error.request?.path}`,
+            `${error.response?.status} ${error.response?.statusText}`,
+          );
+        }
         return Promise.reject(error); // this makes http errors raise
       },
     );
@@ -170,7 +171,7 @@ export class InfinityEvolutionApiConnection {
   @MemoizeExpiring(1 * 60 * 1000)
   async activate(): Promise<void> {
     try {
-      await this.forceRefreshToken();
+      await this.forceActivate();
     } catch (error) {
       this.log.error(
         '[API] Failure sending activation signal: ',
@@ -182,6 +183,7 @@ export class InfinityEvolutionApiConnection {
   async forceActivate(): Promise<void> {
     await this.axios.post(
       `/users/${this.username}/activateSystems`,
+      null,
       {
         headers: {
           Accept: 'application/json',
