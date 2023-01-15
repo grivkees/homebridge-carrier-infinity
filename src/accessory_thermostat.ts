@@ -2,11 +2,6 @@ import { Service } from 'homebridge';
 
 import { CarrierInfinityHomebridgePlatform } from './platform';
 
-import {
-  SystemStatusModel,
-  SystemConfigModel,
-  SystemProfileModel,
-} from './api/models';
 import { FilterService } from './characteristics_filter';
 import {
   convertSystemTemp2CharTemp,
@@ -19,9 +14,6 @@ import { BaseAccessory } from './accessory_base';
 export class ThermostatAccessory extends BaseAccessory {
   private service: Service;
   private fan_service?: Service;
-  private system_status: SystemStatusModel;
-  private system_config: SystemConfigModel;
-  private system_profile: SystemProfileModel;
 
   protected ID(context: Record<string, string>): string {
     return `${context.serialNumber}:${Number(context.zone)-1}`;
@@ -41,15 +33,13 @@ export class ThermostatAccessory extends BaseAccessory {
     );
 
     // Create accessory api bridge
-    this.system_status = this.system.status;
-    this.system_status.fetch().then();
-    this.system_config = this.system.config;
-    this.system_config.fetch().then(async () => {
-      this.service.setCharacteristic(this.platform.Characteristic.Name, await this.system_config.getZoneName(this.accessory.context.zone));
-      const temp_bounds = await this.system_config.getTempBounds();
+    this.system.status.fetch().then();
+    this.system.config.fetch().then(async () => {
+      this.service.setCharacteristic(this.platform.Characteristic.Name, await this.system.config.getZoneName(this.accessory.context.zone));
+      const temp_bounds = await this.system.config.getTempBounds();
       const bound_props = {
-        minValue: Number(convertSystemTemp2CharTemp(temp_bounds[0], await this.system_config.getUnits())),
-        maxValue: Number(convertSystemTemp2CharTemp(temp_bounds[1], await this.system_config.getUnits())),
+        minValue: Number(convertSystemTemp2CharTemp(temp_bounds[0], await this.system.config.getUnits())),
+        maxValue: Number(convertSystemTemp2CharTemp(temp_bounds[1], await this.system.config.getUnits())),
       };
       this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps(bound_props);
       this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).setProps(bound_props);
@@ -57,11 +47,10 @@ export class ThermostatAccessory extends BaseAccessory {
       // setting name explicitly is needed to not lose the word 'thermostat'
       this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
     });
-    this.system_profile = this.system.profile;
-    this.system_profile.fetch().then(async () => {
+    this.system.profile.fetch().then(async () => {
       this.accessory.getService(this.platform.Service.AccessoryInformation)!
-        .setCharacteristic(this.platform.Characteristic.Manufacturer, `${await this.system_profile.getBrand()} Home`)
-        .setCharacteristic(this.platform.Characteristic.Model, await this.system_profile.getModel());
+        .setCharacteristic(this.platform.Characteristic.Manufacturer, `${await this.system.profile.getBrand()} Home`)
+        .setCharacteristic(this.platform.Characteristic.Model, await this.system.profile.getModel());
     });
 
     // Create handlers
@@ -94,10 +83,10 @@ export class ThermostatAccessory extends BaseAccessory {
   setupFanService(): void {
     this.fan_service = this.fan_service || this.accessory.addService(this.platform.Service.Fanv2);
 
-    this.system_config.fetch().then(async () => {
+    this.system.config.fetch().then(async () => {
       this.fan_service?.setCharacteristic(
         this.platform.Characteristic.Name,
-        await this.system_config.getZoneName(this.accessory.context.zone) + ' Fan',
+        await this.system.config.getZoneName(this.accessory.context.zone) + ' Fan',
       );
     });
 
