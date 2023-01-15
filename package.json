@@ -1,7 +1,7 @@
 {
   "displayName": "Homebridge Carrier Infinity",
   "name": "homebridge-carrier-infinity",
-  "version": "1.6.6",
+  "version": "1.6.7",
   "description": "Standalone homebridge plugin for Carrier Infinity / Bryant Evolution / ICP Brands Ion thermostats.",
   "license": "MIT",
   "repository": {
