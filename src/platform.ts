@@ -44,6 +44,14 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
         this.log.error('Could not discover devices: ' + error.message);
       });
     });
+
+    // Periodically ping the carrier api to keep it in sync with the thermostat.
+    // This does not keep HomeKit in sync, however, since the plugin does not
+    // know how to push changes to HK yet.
+    // TODO: try to move this into the api class when we have event based
+    setInterval(() => {
+      this.api_connection.activate();
+    }, 30 * 60 * 1000); // every 30 min
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
