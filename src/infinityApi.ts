@@ -8,7 +8,10 @@ import { PrefixLogger } from './helper_logging';
 import { InfinityRestClient } from './api/rest_client';
 import Axios from 'axios';
 
+import Config, {Zone as CZone, Activity3 as CActivity} from './api/types/config';
 import Location from './api/types/locations';
+import Profile from './api/types/profile';
+import Status, {Zone as SZone} from './api/types/status';
 
 export const SYSTEM_MODE = {
   OFF: 'off',
@@ -39,45 +42,7 @@ export const STATUS = {
   OFF: 'off',
 };
 
-interface BaseElement {
-  '$': {id: string};
-}
-
-interface ZoneActivity extends BaseElement {
-  clsp: string[];
-  htsp: string[];
-  fan: string[];
-}
-
-interface ZoneProgram {
-  day: {
-    period: {
-      time: string[];
-      activity: string[];
-      enabled: string[];
-    }[];
-  }[];
-}
-
-interface Zone {
-  name: string[];
-  fan: string[];
-  rt: string[];
-  rh: string[];
-  clsp: string[];
-  htsp: string[];
-  currentActivity?: string[];
-  hold: string[];
-  holdActivity?: string[];
-  activities?: ZoneActivity[];
-  program?: ZoneProgram[];
-  zoneconditioning?: string[];
-  damperposition?: string[];
-}
-
 abstract class BaseInfinityEvolutionApiModel {
-  // TODO make unknown and handle type checking in get methods
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   protected data_object!: object;
   protected data_object_hash?: string;
   protected HASH_IGNORE_KEYS = new Set<string>();
@@ -178,6 +143,8 @@ abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolution
 }
 
 export class InfinityEvolutionSystemProfile extends BaseInfinityEvolutionSystemApiModel {
+  protected data_object!: Profile;
+
   getPath(): string {
     return `/systems/${this.serialNumber}/profile`;
   }
@@ -207,12 +174,14 @@ export class InfinityEvolutionSystemProfile extends BaseInfinityEvolutionSystemA
     return this.data_object.system_profile.zones[0].zone.filter(
       (zone: { present: string[] }) => zone['present'][0] === STATUS.ON,
     ).map(
-      (zone: BaseElement) => zone['$'].id,
+      (zone) => zone['$'].id,
     );
   }
 }
 
 export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemApiModel {
+  protected data_object!: Status;
+
   getPath(): string {
     return `/systems/${this.serialNumber}/status`;
   }
@@ -247,11 +216,11 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
     }
   }
 
-  private async getZone(zone: string): Promise<Zone> {
+  private async getZone(zone: string): Promise<SZone> {
     await this.fetch();
     return this.data_object.status.zones[0].zone.find(
-      (z: BaseElement) => z['$'].id === zone.toString(),
-    );
+      (z) => z['$'].id === zone.toString(),
+    )!;
   }
 
   async getZoneConditioning(zone: string): Promise<string> {
@@ -307,6 +276,8 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
 }
 
 export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemApiModel {
+  protected data_object!: Config;
+
   getPath(): string {
     return `/systems/${this.serialNumber}/config`;
   }
@@ -327,11 +298,11 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     return this.data_object.config.mode[0];
   }
 
-  private async getZone(zone: string): Promise<Zone> {
+  private async getZone(zone: string): Promise<CZone> {
     await this.fetch();
     return this.data_object.config.zones[0].zone.find(
-      (z: BaseElement) => z['$'].id === zone.toString(),
-    );
+      (z) => z['$'].id === zone.toString(),
+    )!;
   }
 
   async getZoneName(zone: string): Promise<string> {
@@ -372,7 +343,7 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
     }
   }
 
-  private async getZoneActivityConfig(zone: string, activity_name: string): Promise<ZoneActivity> {
+  private async getZoneActivityConfig(zone: string, activity_name: string): Promise<CActivity> {
     await this.fetch();
     // Vacation is stored somewhere else...
     if (activity_name === ACTIVITY.VACATION) {
@@ -381,13 +352,14 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
         clsp: this.data_object.config.vacmaxt,
         htsp: this.data_object.config.vacmint,
         fan: this.data_object.config.vacfan,
+        previousFan: [],
       };
     }
 
     const activities_obj = (await this.getZone(zone)).activities![0];
     return activities_obj['activity'].find(
-      (activity: ZoneActivity) => activity['$'].id === activity_name,
-    );
+      (activity: CActivity) => activity['$'].id === activity_name,
+    )!;
   }
 
   async getZoneActivityFan(zone: string, activity: string): Promise<string> {
