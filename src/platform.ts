@@ -4,8 +4,8 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { ThermostatAccessory } from './accessory_thermostat';
 import { OutdoorTemperatureAccessory } from './accessory_oat';
 import {
-  InfinityEvolutionLocations,
-  InfinityEvolutionSystemModel,
+  LocationsModel,
+  SystemModel,
 } from './api/models';
 import { EnvSensorAccessory } from './accessory_envsensor';
 import { BaseAccessory } from './accessory_base';
@@ -23,7 +23,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
 
   // carrier/bryant api
   public api_connection: InfinityRestClient;
-  public systems: Record<string, InfinityEvolutionSystemModel> = {};
+  public systems: Record<string, SystemModel> = {};
 
   constructor(
     public readonly log: Logger,
@@ -59,10 +59,10 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   }
 
   async discoverSystems(): Promise<void> {
-    const systems = await new InfinityEvolutionLocations(this.api_connection).getSystems();
+    const systems = await new LocationsModel(this.api_connection).getSystems();
     for (const serialNumber of systems) {
       // Create system api object, and save for later reference
-      const system = new InfinityEvolutionSystemModel(this.api_connection, serialNumber);
+      const system = new SystemModel(this.api_connection, serialNumber);
       this.systems[serialNumber] = system;
 
       // Add system based accessories

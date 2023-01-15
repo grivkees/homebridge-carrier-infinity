@@ -1,5 +1,5 @@
 import { ACTIVITY } from './api/constants';
-import { InfinityEvolutionSystemModel } from './api/models';
+import { SystemModel } from './api/models';
 import { Service, Characteristic, Logger } from 'homebridge';
 import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
 
@@ -13,7 +13,7 @@ import { PrefixLogger } from './helper_logging';
 class Wrapper {
   public readonly Service: typeof Service = this.platform.api.hap.Service;
   public readonly Characteristic: typeof Characteristic = this.platform.api.hap.Characteristic;
-  protected readonly system: InfinityEvolutionSystemModel = this.platform.systems[this.context.serialNumber];
+  protected readonly system: SystemModel = this.platform.systems[this.context.serialNumber];
   protected readonly log: Logger = new PrefixLogger(this.system.log, this.context.name);
 
   constructor(

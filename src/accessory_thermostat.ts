@@ -3,9 +3,9 @@ import { Service } from 'homebridge';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 
 import {
-  InfinityEvolutionSystemStatus,
-  InfinityEvolutionSystemConfig,
-  InfinityEvolutionSystemProfile,
+  SystemStatusModel,
+  SystemConfigModel,
+  SystemProfileModel,
 } from './api/models';
 import { FilterService } from './characteristics_filter';
 import {
@@ -19,9 +19,9 @@ import { BaseAccessory } from './accessory_base';
 export class ThermostatAccessory extends BaseAccessory {
   private service: Service;
   private fan_service?: Service;
-  private system_status: InfinityEvolutionSystemStatus;
-  private system_config: InfinityEvolutionSystemConfig;
-  private system_profile: InfinityEvolutionSystemProfile;
+  private system_status: SystemStatusModel;
+  private system_config: SystemConfigModel;
+  private system_profile: SystemProfileModel;
 
   protected ID(context: Record<string, string>): string {
     return `${context.serialNumber}:${Number(context.zone)-1}`;
