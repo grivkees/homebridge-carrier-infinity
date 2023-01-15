@@ -1,0 +1,180 @@
+<?xml version="1.0"?>
+<status xmlns:atom="http://www.w3.org/2005/Atom" version="1.48">
+  <atom:link rel="self" href="https://www.app-api.ing.carrier.com/systems/123ABCD/status"/>
+  <atom:link rel="http://www.api.ing.carrier.com/rels/system" href="https://www.app-api.ing.carrier.com/systems/123ABCD"/>
+  <timestamp>2023-01-15T03:21:12.925Z</timestamp>
+  <pingRate>15</pingRate>
+  <iduStatusPingRate>93600</iduStatusPingRate>
+  <iduFaultsPingRate>86400</iduFaultsPingRate>
+  <oduStatusPingRate>90000</oduStatusPingRate>
+  <oduFaultsPingRate>82800</oduFaultsPingRate>
+  <historyPingRate>75600</historyPingRate>
+  <equipEventsPingRate>79200</equipEventsPingRate>
+  <rootCausePingRate>72000</rootCausePingRate>
+  <serverHasChanges>false</serverHasChanges>
+  <configHasChanges>false</configHasChanges>
+  <dealerHasChanges>false</dealerHasChanges>
+  <dealerLogoHasChanges>false</dealerLogoHasChanges>
+  <oduConfigHasChanges>false</oduConfigHasChanges>
+  <iduConfigHasChanges>false</iduConfigHasChanges>
+  <utilityEventsHasChanges>false</utilityEventsHasChanges>
+  <sensorConfigHasChanges>false</sensorConfigHasChanges>
+  <sensorProfileHasChanges>false</sensorProfileHasChanges>
+  <sensorDiagnosticHasChanges>false</sensorDiagnosticHasChanges>
+  <name>Downstairs</name>
+  <oat>31</oat>
+  <mode>gasheat</mode>
+  <cfgem>F</cfgem>
+  <cfgtype>heatcool</cfgtype>
+  <vacatrunning>off</vacatrunning>
+  <filtrlvl>10</filtrlvl>
+  <uvlvl>100</uvlvl>
+  <humlvl>14</humlvl>
+  <ventlvl>100</ventlvl>
+  <humid>off</humid>
+  <vent/>
+  <localTime>2023-01-14T22:21:12.925</localTime>
+  <oprstsmsg>idle</oprstsmsg>
+  <isDisconnected>false</isDisconnected>
+  <idu>
+    <type/>
+    <opstat/>
+    <cfm/>
+  </idu>
+  <odu>
+    <type/>
+    <opstat/>
+    <opmode/>
+  </odu>
+  <isActive/>
+  <zones>
+    <zone id="1">
+      <name>Downstairs</name>
+      <enabled>on</enabled>
+      <currentActivity>home</currentActivity>
+      <rt>68</rt>
+      <rh>38</rh>
+      <fan>med</fan>
+      <hold>off</hold>
+      <htsp>68.0</htsp>
+      <clsp>70.0</clsp>
+      <otmr>00:00</otmr>
+      <zoneconditioning>active_heat</zoneconditioning>
+      <damperposition>15</damperposition>
+      <occupancy/>
+      <occupancyOverride/>
+    </zone>
+    <zone id="2">
+      <name>Zone 2</name>
+      <enabled>off</enabled>
+      <currentActivity>sleep</currentActivity>
+      <rt>NaN</rt>
+      <rh>38</rh>
+      <fan>off</fan>
+      <hold>off</hold>
+      <htsp>68.0</htsp>
+      <clsp>76.0</clsp>
+      <otmr>00:00</otmr>
+      <zoneconditioning>active_heat</zoneconditioning>
+      <damperposition>15</damperposition>
+      <occupancy/>
+      <occupancyOverride/>
+    </zone>
+    <zone id="3">
+      <name>Zone 3</name>
+      <enabled>off</enabled>
+      <currentActivity>sleep</currentActivity>
+      <rt>NaN</rt>
+      <rh>38</rh>
+      <fan>off</fan>
+      <hold>off</hold>
+      <htsp>68.0</htsp>
+      <clsp>76.0</clsp>
+      <otmr>00:00</otmr>
+      <zoneconditioning>active_heat</zoneconditioning>
+      <damperposition>15</damperposition>
+      <occupancy/>
+      <occupancyOverride/>
+    </zone>
+    <zone id="4">
+      <name>Zone 4</name>
+      <enabled>off</enabled>
+      <currentActivity>sleep</currentActivity>
+      <rt>NaN</rt>
+      <rh>38</rh>
+      <fan>off</fan>
+      <hold>off</hold>
+      <htsp>68.0</htsp>
+      <clsp>76.0</clsp>
+      <otmr>00:00</otmr>
+      <zoneconditioning>active_heat</zoneconditioning>
+      <damperposition>15</damperposition>
+      <occupancy/>
+      <occupancyOverride/>
+    </zone>
+    <zone id="5">
+      <name>Zone 5</name>
+      <enabled>off</enabled>
+      <currentActivity>sleep</currentActivity>
+      <rt>NaN</rt>
+      <rh>38</rh>
+      <fan>off</fan>
+      <hold>off</hold>
+      <htsp>68.0</htsp>
+      <clsp>76.0</clsp>
+      <otmr>00:00</otmr>
+      <zoneconditioning>active_heat</zoneconditioning>
+      <damperposition>15</damperposition>
+      <occupancy/>
+      <occupancyOverride/>
+    </zone>
+    <zone id="6">
+      <name>Zone 6</name>
+      <enabled>off</enabled>
+      <currentActivity>sleep</currentActivity>
+      <rt>NaN</rt>
+      <rh>38</rh>
+      <fan>off</fan>
+      <hold>off</hold>
+      <htsp>68.0</htsp>
+      <clsp>76.0</clsp>
+      <otmr>00:00</otmr>
+      <zoneconditioning>active_heat</zoneconditioning>
+      <damperposition>15</damperposition>
+      <occupancy/>
+      <occupancyOverride/>
+    </zone>
+    <zone id="7">
+      <name>Zone 7</name>
+      <enabled>off</enabled>
+      <currentActivity>sleep</currentActivity>
+      <rt>NaN</rt>
+      <rh>38</rh>
+      <fan>off</fan>
+      <hold>off</hold>
+      <htsp>68.0</htsp>
+      <clsp>76.0</clsp>
+      <otmr>00:00</otmr>
+      <zoneconditioning>active_heat</zoneconditioning>
+      <damperposition>15</damperposition>
+      <occupancy/>
+      <occupancyOverride/>
+    </zone>
+    <zone id="8">
+      <name>Zone 8</name>
+      <enabled>off</enabled>
+      <currentActivity>sleep</currentActivity>
+      <rt>NaN</rt>
+      <rh>38</rh>
+      <fan>off</fan>
+      <hold>off</hold>
+      <htsp>68.0</htsp>
+      <clsp>76.0</clsp>
+      <otmr>00:00</otmr>
+      <zoneconditioning>active_heat</zoneconditioning>
+      <damperposition>15</damperposition>
+      <occupancy/>
+      <occupancyOverride/>
+    </zone>
+  </zones>
+</status>

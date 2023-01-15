@@ -1,0 +1,112 @@
+<?xml version="1.0"?>
+<system_profile xmlns:atom="http://www.w3.org/2005/Atom" version="1.48">
+  <atom:link rel="self" href="https://www.app-api.ing.carrier.com/systems/123ABCD/profile"/>
+  <atom:link rel="http://www.api.ing.carrier.com/rels/system" href="https://www.app-api.ing.carrier.com/systems/123ABCD"/>
+  <timestamp>2022-12-14T21:45:00.830Z</timestamp>
+  <pin>pin123456789</pin>
+  <name>Downstairs</name>
+  <serial>123ABCD</serial>
+  <brand>Bryant</brand>
+  <indoorModel>IN-MODEL-12345</indoorModel>
+  <indoorSerial>IN-SERIAL-12345</indoorSerial>
+  <outdoorModel>OUT-MODEL-12345</outdoorModel>
+  <outdoorSerial>OUT-SERIAL-12345</outdoorSerial>
+  <samType>ING</samType>
+  <firmware>FIRM-1.2.3</firmware>
+  <model>CONTROL-MODEL-A</model>
+  <iduversion>IDU-VERSION-99</iduversion>
+  <idutype>furnace</idutype>
+  <idusource>gas</idusource>
+  <idustages>2</idustages>
+  <iducapacity>58</iducapacity>
+  <pwmblower>off</pwmblower>
+  <oduversion>ODU-VERSION-99</oduversion>
+  <odutype>ac2stg</odutype>
+  <oducapacity>24</oducapacity>
+  <ventpresent>off</ventpresent>
+  <sampresent>off</sampresent>
+  <sammodel/>
+  <samserial/>
+  <samversion/>
+  <nimpresent>off</nimpresent>
+  <nimmodel/>
+  <nimserial/>
+  <nimversion/>
+  <routerMac>01AB23CD45EF</routerMac>
+  <vfdModel/>
+  <vfdSerial/>
+  <vfdVersion/>
+  <ewtsensorpresent>off</ewtsensorpresent>
+  <zoneboards>
+    <board id="1">
+      <present>off</present>
+      <model/>
+      <serial/>
+      <version/>
+    </board>
+    <board id="2">
+      <present>off</present>
+      <model/>
+      <serial/>
+      <version/>
+    </board>
+  </zoneboards>
+  <zones>
+    <zone id="1">
+      <present>on</present>
+      <sensortype>user interface</sensortype>
+      <ssmodel>N/A</ssmodel>
+      <ssserial>N/A</ssserial>
+      <ssversion>N/A</ssversion>
+    </zone>
+    <zone id="2">
+      <present>off</present>
+      <sensortype>remote sensor</sensortype>
+      <ssmodel>N/A</ssmodel>
+      <ssserial>N/A</ssserial>
+      <ssversion>N/A</ssversion>
+    </zone>
+    <zone id="3">
+      <present>off</present>
+      <sensortype>remote sensor</sensortype>
+      <ssmodel>N/A</ssmodel>
+      <ssserial>N/A</ssserial>
+      <ssversion>N/A</ssversion>
+    </zone>
+    <zone id="4">
+      <present>off</present>
+      <sensortype>remote sensor</sensortype>
+      <ssmodel>N/A</ssmodel>
+      <ssserial>N/A</ssserial>
+      <ssversion>N/A</ssversion>
+    </zone>
+    <zone id="5">
+      <present>off</present>
+      <sensortype>remote sensor</sensortype>
+      <ssmodel>N/A</ssmodel>
+      <ssserial>N/A</ssserial>
+      <ssversion>N/A</ssversion>
+    </zone>
+    <zone id="6">
+      <present>off</present>
+      <sensortype>remote sensor</sensortype>
+      <ssmodel>N/A</ssmodel>
+      <ssserial>N/A</ssserial>
+      <ssversion>N/A</ssversion>
+    </zone>
+    <zone id="7">
+      <present>off</present>
+      <sensortype>remote sensor</sensortype>
+      <ssmodel>N/A</ssmodel>
+      <ssserial>N/A</ssserial>
+      <ssversion>N/A</ssversion>
+    </zone>
+    <zone id="8">
+      <present>off</present>
+      <sensortype>remote sensor</sensortype>
+      <ssmodel>N/A</ssmodel>
+      <ssserial>N/A</ssserial>
+      <ssversion>N/A</ssversion>
+    </zone>
+  </zones>
+</system_profile>
