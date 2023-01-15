@@ -4,13 +4,13 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { ThermostatAccessory } from './accessory_thermostat';
 import { OutdoorTemperatureAccessory } from './accessory_oat';
 import {
-  InfinityEvolutionApiConnection,
   InfinityEvolutionLocations,
   InfinityEvolutionSystemModel,
 } from './infinityApi';
 import { EnvSensorAccessory } from './accessory_envsensor';
 import { BaseAccessory } from './accessory_base';
 import { ComfortActivityAccessory } from './accessory_comfort_activity';
+import { InfinityRestClient } from './api/rest_client';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -22,7 +22,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   public readonly accessories: Record<string, BaseAccessory> = {};
 
   // carrier/bryant api
-  public api_connection: InfinityEvolutionApiConnection;
+  public api_connection: InfinityRestClient;
   public systems: Record<string, InfinityEvolutionSystemModel> = {};
 
   constructor(
@@ -34,7 +34,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       this.log.error('Username and password do not appear to be set in config. This is not going to work.');
     }
 
-    this.api_connection = new InfinityEvolutionApiConnection(config['username'], config['password'], this.log);
+    this.api_connection = new InfinityRestClient(config['username'], config['password'], this.log);
     this.api_connection.forceRefreshToken().then().catch(error => {
       this.log.error('Login failed: ' + error.message);
     });
