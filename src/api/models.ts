@@ -14,7 +14,7 @@ import Profile from './interface_profile';
 import Status, {Zone as SZone} from './interface_status';
 import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
 
-abstract class BaseInfinityEvolutionApiModel {
+abstract class BaseModel {
   protected data_object!: object;
   protected data_object_hash?: string;
   protected HASH_IGNORE_KEYS = new Set<string>();
@@ -73,7 +73,7 @@ abstract class BaseInfinityEvolutionApiModel {
   }
 }
 
-export class InfinityEvolutionLocations extends BaseInfinityEvolutionApiModel {
+export class LocationsModel extends BaseModel {
   protected data_object!: Location;
 
   getPath(): string {
@@ -93,7 +93,7 @@ export class InfinityEvolutionLocations extends BaseInfinityEvolutionApiModel {
   }
 }
 
-abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolutionApiModel {
+abstract class BaseSystemModel extends BaseModel {
   private last_updated = 0;  // TODO use this
   protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime']);
 
@@ -114,7 +114,7 @@ abstract class BaseInfinityEvolutionSystemApiModel extends BaseInfinityEvolution
   }
 }
 
-export class InfinityEvolutionSystemProfile extends BaseInfinityEvolutionSystemApiModel {
+export class SystemProfileModel extends BaseSystemModel {
   protected data_object!: Profile;
 
   getPath(): string {
@@ -151,7 +151,7 @@ export class InfinityEvolutionSystemProfile extends BaseInfinityEvolutionSystemA
   }
 }
 
-export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemApiModel {
+export class SystemStatusModel extends BaseSystemModel {
   protected data_object!: Status;
 
   getPath(): string {
@@ -247,7 +247,7 @@ export class InfinityEvolutionSystemStatus extends BaseInfinityEvolutionSystemAp
   }
 }
 
-export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemApiModel {
+export class SystemConfigModel extends BaseSystemModel {
   protected data_object!: Config;
 
   getPath(): string {
@@ -564,10 +564,10 @@ export class InfinityEvolutionSystemConfig extends BaseInfinityEvolutionSystemAp
   }
 }
 
-export class InfinityEvolutionSystemModel {
-  public status: InfinityEvolutionSystemStatus;
-  public config: InfinityEvolutionSystemConfig;
-  public profile: InfinityEvolutionSystemProfile;
+export class SystemModel {
+  public status: SystemStatusModel;
+  public config: SystemConfigModel;
+  public profile: SystemProfileModel;
   public log: Logger = new PrefixLogger(this.api_connection.log, this.serialNumber);
 
   constructor(
@@ -575,17 +575,17 @@ export class InfinityEvolutionSystemModel {
     public readonly serialNumber: string,
   ) {
     const api_logger = new PrefixLogger(this.log, 'API');
-    this.status = new InfinityEvolutionSystemStatus(
+    this.status = new SystemStatusModel(
       api_connection,
       serialNumber,
       api_logger,
     );
-    this.config = new InfinityEvolutionSystemConfig(
+    this.config = new SystemConfigModel(
       api_connection,
       serialNumber,
       api_logger,
     );
-    this.profile = new InfinityEvolutionSystemProfile(
+    this.profile = new SystemProfileModel(
       api_connection,
       serialNumber,
       api_logger,

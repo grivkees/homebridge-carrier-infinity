@@ -1,12 +1,12 @@
 import { Logger, PlatformAccessory, Service, WithUUID } from 'homebridge';
 import { PrefixLogger } from './helper_logging';
-import { InfinityEvolutionSystemModel } from './api/models';
+import { SystemModel } from './api/models';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 
 export abstract class BaseAccessory {
   public readonly accessory: PlatformAccessory;
-  protected readonly system: InfinityEvolutionSystemModel = this.platform.systems[this.context.serialNumber];
+  protected readonly system: SystemModel = this.platform.systems[this.context.serialNumber];
   protected readonly log: Logger = new PrefixLogger(this.system.log, this.context.name);
 
   constructor(
