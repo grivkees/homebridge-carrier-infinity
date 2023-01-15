@@ -13,9 +13,11 @@ import Location from './interface_locations';
 import Profile from './interface_profile';
 import Status, {Zone as SZone} from './interface_status';
 import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
+import { concat, from, interval, Observable, of, switchMap } from 'rxjs';
 
 abstract class BaseModel {
   protected data_object!: object;
+  private data$: Observable<object>;
   protected data_object_hash?: string;
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
@@ -25,6 +27,21 @@ abstract class BaseModel {
     protected readonly infinity_client: InfinityRestClient,
   ) {
     this.write_lock = new Mutex();
+
+    // Set up periodic updates to data observer
+    const fetch_and_get = async () => {
+      await this.fetch();
+      return this.data_object;
+    };
+    this.data$ = concat(
+      from(fetch_and_get()),
+      interval(5 * 60 * 1000).pipe(switchMap(fetch_and_get)),
+    );
+
+    // TODO: remove me once data$ has subscribers
+    this.data$.subscribe((data) => {
+      this.log.warn(`${Object.keys(data)}`);
+    });
   }
 
   abstract getPath(): string;
