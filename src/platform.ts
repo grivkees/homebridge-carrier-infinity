@@ -22,7 +22,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   public readonly accessories: Record<string, BaseAccessory> = {};
 
   // carrier/bryant api
-  public api_connection: InfinityRestClient;
+  public infinity_client: InfinityRestClient;
   public systems: Record<string, SystemModel> = {};
 
   constructor(
@@ -34,8 +34,8 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       this.log.error('Username and password do not appear to be set in config. This is not going to work.');
     }
 
-    this.api_connection = new InfinityRestClient(config['username'], config['password'], this.log);
-    this.api_connection.forceRefreshToken().then().catch(error => {
+    this.infinity_client = new InfinityRestClient(config['username'], config['password'], this.log);
+    this.infinity_client.forceRefreshToken().then().catch(error => {
       this.log.error('Login failed: ' + error.message);
     });
 
@@ -50,7 +50,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     // know how to push changes to HK yet.
     // TODO: try to move this into the api class when we have event based
     setInterval(() => {
-      this.api_connection.activate();
+      this.infinity_client.activate();
     }, 30 * 60 * 1000); // every 30 min
   }
 
@@ -59,10 +59,10 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   }
 
   async discoverSystems(): Promise<void> {
-    const systems = await new LocationsModel(this.api_connection).getSystems();
+    const systems = await new LocationsModel(this.infinity_client).getSystems();
     for (const serialNumber of systems) {
       // Create system api object, and save for later reference
-      const system = new SystemModel(this.api_connection, serialNumber);
+      const system = new SystemModel(this.infinity_client, serialNumber);
       this.systems[serialNumber] = system;
 
       // Add system based accessories

@@ -19,10 +19,10 @@ abstract class BaseModel {
   protected data_object_hash?: string;
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
-  protected log: Logger = new PrefixLogger(this.api_connection.log, 'API');
+  protected log: Logger = new PrefixLogger(this.infinity_client.log, 'API');
 
   constructor(
-    protected readonly api_connection: InfinityRestClient,
+    protected readonly infinity_client: InfinityRestClient,
   ) {
     this.write_lock = new Mutex();
   }
@@ -60,9 +60,9 @@ abstract class BaseModel {
   }
 
   protected async forceFetch(): Promise<void> {
-    await this.api_connection.refreshToken();
-    await this.api_connection.activate();
-    const response = await this.api_connection.axios.get(this.getPath());
+    await this.infinity_client.refreshToken();
+    await this.infinity_client.activate();
+    const response = await this.infinity_client.axios.get(this.getPath());
     if (response.data) {
       this.data_object = await xml2js.parseStringPromise(response.data) as object;
       this.data_object_hash = this.hashDataObject();
@@ -77,7 +77,7 @@ export class LocationsModel extends BaseModel {
   protected data_object!: Location;
 
   getPath(): string {
-    return `/users/${this.api_connection.username}/locations`;
+    return `/users/${this.infinity_client.username}/locations`;
   }
 
   async getSystems(): Promise<string[]> {
@@ -98,11 +98,11 @@ abstract class BaseSystemModel extends BaseModel {
   protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime']);
 
   constructor(
-    protected readonly api_connection: InfinityRestClient,
+    protected readonly infinity_client: InfinityRestClient,
     public readonly serialNumber: string,
     protected readonly log: Logger,
   ) {
-    super(api_connection);
+    super(infinity_client);
   }
 
   protected async forceFetch(): Promise<void> {
@@ -455,7 +455,7 @@ export class SystemConfigModel extends BaseSystemModel {
     const builder = new xml2js.Builder();
     const new_xml = builder.buildObject(this.data_object);
     const data = `data=${encodeURIComponent(new_xml)}`;
-    await this.api_connection.axios.post(
+    await this.infinity_client.axios.post(
       this.getPath(),
       data,
       {
@@ -568,25 +568,25 @@ export class SystemModel {
   public status: SystemStatusModel;
   public config: SystemConfigModel;
   public profile: SystemProfileModel;
-  public log: Logger = new PrefixLogger(this.api_connection.log, this.serialNumber);
+  public log: Logger = new PrefixLogger(this.infinity_client.log, this.serialNumber);
 
   constructor(
-    protected readonly api_connection: InfinityRestClient,
+    protected readonly infinity_client: InfinityRestClient,
     public readonly serialNumber: string,
   ) {
     const api_logger = new PrefixLogger(this.log, 'API');
     this.status = new SystemStatusModel(
-      api_connection,
+      infinity_client,
       serialNumber,
       api_logger,
     );
     this.config = new SystemConfigModel(
-      api_connection,
+      infinity_client,
       serialNumber,
       api_logger,
     );
     this.profile = new SystemProfileModel(
-      api_connection,
+      infinity_client,
       serialNumber,
       api_logger,
     );
