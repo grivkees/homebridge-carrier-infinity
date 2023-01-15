@@ -6,7 +6,7 @@ import { OutdoorTemperatureAccessory } from './accessory_oat';
 import {
   InfinityEvolutionLocations,
   InfinityEvolutionSystemModel,
-} from './infinityApi';
+} from './api/models';
 import { EnvSensorAccessory } from './accessory_envsensor';
 import { BaseAccessory } from './accessory_base';
 import { ComfortActivityAccessory } from './accessory_comfort_activity';

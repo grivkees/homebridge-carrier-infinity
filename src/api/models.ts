@@ -1,46 +1,18 @@
-import { processSetpointDeadband } from './helpers';
+import { processSetpointDeadband } from '../helpers';
 import { MemoizeExpiring } from 'typescript-memoize';
 import { Mutex, tryAcquire, E_ALREADY_LOCKED, E_CANCELED, E_TIMEOUT } from 'async-mutex';
 import * as xml2js from 'xml2js';
 import { Logger } from 'homebridge';
 import hash from 'object-hash';
-import { PrefixLogger } from './helper_logging';
-import { InfinityRestClient } from './api/rest_client';
+import { PrefixLogger } from '../helper_logging';
+import { InfinityRestClient } from './rest_client';
 import Axios from 'axios';
 
-import Config, {Zone as CZone, Activity3 as CActivity} from './api/types/config';
-import Location from './api/types/locations';
-import Profile from './api/types/profile';
-import Status, {Zone as SZone} from './api/types/status';
-
-export const SYSTEM_MODE = {
-  OFF: 'off',
-  COOL: 'cool',
-  HEAT: 'heat',
-  AUTO: 'auto',
-  FAN_ONLY: 'fanonly',
-};
-
-export const ACTIVITY = {
-  HOME: 'home',
-  AWAY: 'away',
-  SLEEP: 'sleep',
-  WAKE: 'wake',
-  MANUAL: 'manual',
-  VACATION: 'vacation',
-};
-
-export const FAN_MODE = {
-  OFF: 'off',
-  LOW: 'low',
-  MED: 'med',
-  HIGH: 'high',
-};
-
-export const STATUS = {
-  ON: 'on',
-  OFF: 'off',
-};
+import Config, {Zone as CZone, Activity3 as CActivity} from './types/config';
+import Location from './types/locations';
+import Profile from './types/profile';
+import Status, {Zone as SZone} from './types/status';
+import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
 
 abstract class BaseInfinityEvolutionApiModel {
   protected data_object!: object;

@@ -1,6 +1,6 @@
 import { Logger, PlatformAccessory, Service, WithUUID } from 'homebridge';
 import { PrefixLogger } from './helper_logging';
-import { InfinityEvolutionSystemModel } from './infinityApi';
+import { InfinityEvolutionSystemModel } from './api/models';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 

@@ -1,7 +1,7 @@
 import { CharacteristicValue } from 'homebridge';
 import { ThermostatCharacteristicWrapper, MultiWrapper } from './characteristics_base';
 import { convertCharTemp2SystemTemp, convertSystemTemp2CharTemp } from './helpers';
-import { FAN_MODE, SYSTEM_MODE } from './infinityApi';
+import { FAN_MODE, SYSTEM_MODE } from './api/constants';
 
 class CurrentACStatus extends ThermostatCharacteristicWrapper {
   ctype = this.Characteristic.CurrentHeatingCoolingState;

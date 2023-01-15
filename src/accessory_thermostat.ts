@@ -6,7 +6,7 @@ import {
   InfinityEvolutionSystemStatus,
   InfinityEvolutionSystemConfig,
   InfinityEvolutionSystemProfile,
-} from './infinityApi';
+} from './api/models';
 import { FilterService } from './characteristics_filter';
 import {
   convertSystemTemp2CharTemp,
