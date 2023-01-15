@@ -8,10 +8,10 @@ import { PrefixLogger } from '../helper_logging';
 import { InfinityRestClient } from './rest_client';
 import Axios from 'axios';
 
-import Config, {Zone as CZone, Activity3 as CActivity} from './types/config';
-import Location from './types/locations';
-import Profile from './types/profile';
-import Status, {Zone as SZone} from './types/status';
+import Config, {Zone as CZone, Activity3 as CActivity} from './interface_config';
+import Location from './interface_locations';
+import Profile from './interface_profile';
+import Status, {Zone as SZone} from './interface_status';
 import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
 
 abstract class BaseInfinityEvolutionApiModel {
