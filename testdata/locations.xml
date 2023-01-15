@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<locations xmlns:atom="http://www.w3.org/2005/Atom" version="1.48">
+  <atom:link rel="self" href="https://www.app-api.ing.carrier.com/users/user12345/locations"/>
+  <atom:link rel="http://www.api.ing.carrier.com/rels/user" href="https://www.app-api.ing.carrier.com/users/user12345"/>
+  <location>
+    <atom:link rel="self" href="https://www.app-api.ing.carrier.com/locations/123456789" title="Home"/>
+    <name>Home</name>
+    <street1>1234 STREET</street1>
+    <street2/>
+    <city>CITY</city>
+    <state>STATE</state>
+    <country>United States</country>
+    <postal>12345</postal>
+    <systems>
+      <system>
+        <atom:link rel="self" href="https://www.app-api.ing.carrier.com/systems/123ABCD" title="Downstairs"/>
+      </system>
+    </systems>
+  </location>
+</locations>

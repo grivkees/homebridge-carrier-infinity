@@ -8,6 +8,8 @@ import { PrefixLogger } from './helper_logging';
 import { InfinityRestClient } from './api/rest_client';
 import Axios from 'axios';
 
+import Location from './api/types/locations';
+
 export const SYSTEM_MODE = {
   OFF: 'off',
   COOL: 'cool',
@@ -76,7 +78,7 @@ interface Zone {
 abstract class BaseInfinityEvolutionApiModel {
   // TODO make unknown and handle type checking in get methods
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  protected data_object: any = null;
+  protected data_object!: object;
   protected data_object_hash?: string;
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
@@ -125,7 +127,7 @@ abstract class BaseInfinityEvolutionApiModel {
     await this.api_connection.activate();
     const response = await this.api_connection.axios.get(this.getPath());
     if (response.data) {
-      this.data_object = await xml2js.parseStringPromise(response.data);
+      this.data_object = await xml2js.parseStringPromise(response.data) as object;
       this.data_object_hash = this.hashDataObject();
     } else {
       this.log.debug(response.data);
@@ -135,6 +137,8 @@ abstract class BaseInfinityEvolutionApiModel {
 }
 
 export class InfinityEvolutionLocations extends BaseInfinityEvolutionApiModel {
+  protected data_object!: Location;
+
   getPath(): string {
     return `/users/${this.api_connection.username}/locations`;
   }

@@ -22,7 +22,8 @@
     "watch": "npm run build && (sudo hb-service link || true) && nodemon",
     "build": "rimraf ./dist && tsc",
     "prepublishOnly": "npm run lint && npm run build",
-    "test": "jest"
+    "test": "jest",
+    "xml2ts": "find testdata/*.xml -exec sh -c 'node scripts/xml2ts.ts {} src/api/types/$(basename {} .xml).ts' \\;"
   },
   "nodemonConfig": {
     "watch": [
@@ -70,6 +71,7 @@
     "eslint-plugin-spellcheck": "^0.0.19",
     "homebridge": "^1.2.3",
     "jest": "^27.0.4",
+    "json-to-ts": "^1.7.0",
     "nodemon": "^2.0.6",
     "rimraf": "^3.0.2",
     "semantic-release": "^19.0.2",
