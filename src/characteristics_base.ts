@@ -1,4 +1,5 @@
-import { ACTIVITY, InfinityEvolutionSystemModel } from './infinityApi';
+import { ACTIVITY } from './api/constants';
+import { InfinityEvolutionSystemModel } from './api/models';
 import { Service, Characteristic, Logger } from 'homebridge';
 import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
 

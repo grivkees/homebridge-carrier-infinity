@@ -1,5 +1,5 @@
 import { CharacteristicValue } from 'homebridge';
-import { FAN_MODE } from './infinityApi';
+import { FAN_MODE } from './api/constants';
 
 export function convertSystemTemp2CharTemp(temp: number, units: string): CharacteristicValue {
   if (units === 'F') {

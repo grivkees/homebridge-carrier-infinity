@@ -1,7 +1,7 @@
 import { CharacteristicValue } from 'homebridge';
 import { ThermostatCharacteristicWrapper, MultiWrapper } from './characteristics_base';
 import { convertCharFan2SystemFan, convertSystemFan2CharFan } from './helpers';
-import { FAN_MODE, SYSTEM_MODE } from './infinityApi';
+import { FAN_MODE, SYSTEM_MODE } from './api/constants';
 
 /*
  * Controls for system fan.
