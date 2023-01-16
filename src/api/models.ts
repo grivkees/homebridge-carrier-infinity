@@ -13,35 +13,41 @@ import Location from './interface_locations';
 import Profile from './interface_profile';
 import Status, {Zone as SZone} from './interface_status';
 import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
-import { concat, from, interval, Observable, of, switchMap } from 'rxjs';
+import { combineLatest, throttleTime, from, fromEvent, interval, merge, Observable, switchMap, of, distinctUntilChanged, mergeAll } from 'rxjs';
+import EventEmitter from 'events';
 
 abstract class BaseModel {
   protected data_object!: object;
-  private data$: Observable<object>;
+  // TODO: is there a way to make the 'typeof' below work with the subclasses
+  public data$: Observable<typeof this.data_object>;
   protected data_object_hash?: string;
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
   protected log: Logger = new PrefixLogger(this.infinity_client.log, 'API');
+
+  public events = new EventEmitter();
 
   constructor(
     protected readonly infinity_client: InfinityRestClient,
   ) {
     this.write_lock = new Mutex();
 
-    // Set up periodic updates to data observer
-    const fetch_and_get = async () => {
-      await this.fetch();
-      return this.data_object;
-    };
-    this.data$ = concat(
-      from(fetch_and_get()),
-      interval(5 * 60 * 1000).pipe(switchMap(fetch_and_get)),
+    // Set up the triggers for updating our api data
+    const ticks = merge(
+      // Immediate Fetch
+      of(1),
+      // Periodic Fetch
+      interval(5 * 60 * 1000),
+      // On Demand Fetch
+      fromEvent(this.events, 'onGet'),
+    // Throttle to ignore events in quick succession
+    ).pipe(throttleTime(10000));
+    // Use trigger to update data model
+    this.data$ = ticks.pipe(
+      switchMap(
+        () => from(this.fetch().then(() => this.data_object)),
+      ),
     );
-
-    // TODO: remove me once data$ has subscribers
-    this.data$.subscribe((data) => {
-      this.log.warn(`${Object.keys(data)}`);
-    });
   }
 
   abstract getPath(): string;
@@ -92,6 +98,7 @@ abstract class BaseModel {
 
 export class LocationsModel extends BaseModel {
   protected data_object!: Location;
+  public data$!: Observable<Location>;
 
   getPath(): string {
     return `/users/${this.infinity_client.username}/locations`;
@@ -133,29 +140,34 @@ abstract class BaseSystemModel extends BaseModel {
 
 export class SystemProfileModel extends BaseSystemModel {
   protected data_object!: Profile;
+  public data$!: Observable<Profile>;
 
   getPath(): string {
     return `/systems/${this.serialNumber}/profile`;
   }
 
-  async getName(): Promise<string> {
-    await this.fetch();
-    return this.data_object.system_profile.name[0];
+  getName(): Observable<string> {
+    return this.data$.pipe(
+      switchMap(data => of(data.system_profile.name[0])),
+    );
   }
 
-  async getBrand(): Promise<string> {
-    await this.fetch();
-    return this.data_object.system_profile.brand[0];
+  getBrand(): Observable<string> {
+    return this.data$.pipe(
+      switchMap(data => of(data.system_profile.brand[0])),
+    );
   }
 
-  async getModel(): Promise<string> {
-    await this.fetch();
-    return this.data_object.system_profile.model[0];
+  getModel(): Observable<string> {
+    return this.data$.pipe(
+      switchMap(data => of(data.system_profile.model[0])),
+    );
   }
 
-  async getFirmware(): Promise<string> {
-    await this.fetch();
-    return this.data_object.system_profile.firmware[0];
+  getFirmware(): Observable<string> {
+    return this.data$.pipe(
+      switchMap(data => of(data.system_profile.firmware[0])),
+    );
   }
 
   async getZones(): Promise<Array<string>> {
@@ -170,6 +182,7 @@ export class SystemProfileModel extends BaseSystemModel {
 
 export class SystemStatusModel extends BaseSystemModel {
   protected data_object!: Status;
+  public data$!: Observable<Status>;
 
   getPath(): string {
     return `/systems/${this.serialNumber}/status`;
@@ -266,6 +279,7 @@ export class SystemStatusModel extends BaseSystemModel {
 
 export class SystemConfigModel extends BaseSystemModel {
   protected data_object!: Config;
+  public data$!: Observable<Config>;
 
   getPath(): string {
     return `/systems/${this.serialNumber}/config`;
@@ -586,6 +600,7 @@ export class SystemModel {
   public config: SystemConfigModel;
   public profile: SystemProfileModel;
   public log: Logger = new PrefixLogger(this.infinity_client.log, this.serialNumber);
+  public data$: Observable<[Status, Config, Profile]>;
 
   constructor(
     protected readonly infinity_client: InfinityRestClient,
@@ -607,5 +622,10 @@ export class SystemModel {
       serialNumber,
       api_logger,
     );
+    this.data$ = combineLatest([
+      this.status.data$,
+      this.config.data$,
+      this.profile.data$,
+    ]);
   }
 }

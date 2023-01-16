@@ -10,6 +10,7 @@ import { ThermostatRHService } from './characteristics_humidity';
 import { FanService } from './characteristics_fan';
 import { ACService } from './characteristics_ac';
 import { BaseAccessory } from './accessory_base';
+import { AccessoryInformation } from './characteristics_base';
 
 export class ThermostatAccessory extends BaseAccessory {
   private service: Service;
@@ -25,9 +26,6 @@ export class ThermostatAccessory extends BaseAccessory {
   ) {
     super(platform, context);
     // Create services
-    this.accessory.getService(this.platform.Service.AccessoryInformation)!
-      .setCharacteristic(this.platform.Characteristic.SerialNumber, this.accessory.context.serialNumber);
-
     this.service = this.accessory.getService(
       this.platform.Service.Thermostat) || this.accessory.addService(this.platform.Service.Thermostat,
     );
@@ -47,11 +45,15 @@ export class ThermostatAccessory extends BaseAccessory {
       // setting name explicitly is needed to not lose the word 'thermostat'
       this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
     });
-    this.system.profile.fetch().then(async () => {
-      this.accessory.getService(this.platform.Service.AccessoryInformation)!
-        .setCharacteristic(this.platform.Characteristic.Manufacturer, `${await this.system.profile.getBrand()} Home`)
-        .setCharacteristic(this.platform.Characteristic.Model, await this.system.profile.getModel());
-    });
+
+    // Accessory service handler
+    new AccessoryInformation(
+      this.platform,
+      this.accessory.context,
+    ).wrap(
+      this.accessory.getService(this.platform.Service.AccessoryInformation) ||
+      this.accessory.addService(this.platform.Service.AccessoryInformation),
+    );
 
     // Create handlers
     new ACService(

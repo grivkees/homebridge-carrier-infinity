@@ -6,6 +6,9 @@ import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { PrefixLogger } from './helper_logging';
 
+import Config from './api/interface_config';
+import Profile from './api/interface_profile';
+import Status from './api/interface_status';
 /*
 * Helpers to add handlers to the HAP Service and Characteristic objects.
 */
@@ -54,14 +57,21 @@ export abstract class CharacteristicWrapper extends Wrapper {
       characteristic.setProps(this.props);
     }
     if (this.get) {
-      characteristic.onGet(async () => {
-        // schedule characteristic update
-        setImmediate(async () => {
+      // Subscribe to changes to data model
+      this.system.data$.subscribe(
+        async data => {
+          this.log.warn(`Updating ${this.ctype.name}`); // TODO REMOVE
+          // TODO pass data to the get function
           if (this.get) {
             characteristic.updateValue(await this.get());
           }
-        });
-        // and return immediately
+        },
+      );
+      characteristic.onGet(async () => {
+        // Tell the system model it should update ...
+        this.system.status.events.emit('onGet');
+        this.system.config.events.emit('onGet');
+        // ... and return immediately
         // try 1) existing value, if falsy, 2) default value, if null, 3) keep existing value
         return characteristic.value || this.default_value || characteristic.value;
       });
@@ -109,11 +119,12 @@ export abstract class ThermostatCharacteristicWrapper extends CharacteristicWrap
 
 export class AccessoryInformation extends Wrapper {
   wrap(service: Service): void {
-    this.system.profile.fetch().then(async () => {
-      service
-        .setCharacteristic(this.Characteristic.SerialNumber, this.system.serialNumber)
-        .setCharacteristic(this.Characteristic.Manufacturer, `${await this.system.profile.getBrand()} Home`)
-        .setCharacteristic(this.Characteristic.Model, await this.system.profile.getModel());
+    service.updateCharacteristic(this.Characteristic.SerialNumber, this.system.serialNumber);
+    this.system.profile.getModel().subscribe(x => {
+      service.updateCharacteristic(this.Characteristic.Model, x);
+    });
+    this.system.profile.getBrand().subscribe(x => {
+      service.updateCharacteristic(this.Characteristic.Manufacturer, `${x} Home`);
     });
   }
 }
