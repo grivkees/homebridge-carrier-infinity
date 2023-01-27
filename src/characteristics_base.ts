@@ -9,7 +9,7 @@ import { PrefixLogger } from './helper_logging';
 import Config from './api/interface_config';
 import Profile from './api/interface_profile';
 import Status from './api/interface_status';
-import { from, Observable, of, switchMap } from 'rxjs';
+import { from, map, Observable, of, switchMap } from 'rxjs';
 /*
 * Helpers to add handlers to the HAP Service and Characteristic objects.
 */
@@ -52,7 +52,7 @@ export abstract class CharacteristicWrapper extends Wrapper {
   // used exclusively if no char value is set yet (first accessory load)
   protected default_value: CharacteristicValue | null = null;
   // Holds an observable of the system/api-based value
-  protected system_value?: Observable<CharacteristicValue>;
+  protected value?: Observable<CharacteristicValue>;
 
   wrap(service: Service): void {
     const characteristic = service.getCharacteristic(this.ctype);
@@ -61,7 +61,7 @@ export abstract class CharacteristicWrapper extends Wrapper {
     }
     // TODO get rid of "get" when finished migrating
     if (this.get) {
-      this.system_value = this.system.data$.pipe(
+      this.value = this.system.data$.pipe(
         switchMap(
           () => {
             if (this.get) {
@@ -74,8 +74,8 @@ export abstract class CharacteristicWrapper extends Wrapper {
       );
     }
     // Push updates from the system-based value observable to HK
-    if (this.system_value) {
-      this.system_value.subscribe(
+    if (this.value) {
+      this.value.subscribe(
         async data => {
           this.log.warn(`Updating ${this.ctype.name} to ${data}`); // TODO REMOVE
           characteristic.updateValue(data);
@@ -135,19 +135,17 @@ export abstract class ThermostatCharacteristicWrapper extends CharacteristicWrap
 
 class AccessorySerial extends CharacteristicWrapper {
   ctype = this.Characteristic.SerialNumber;
-  system_value = of(this.system.serialNumber);
+  value = of(this.system.serialNumber);
 }
 
 class AccessoryModel extends CharacteristicWrapper {
   ctype = this.Characteristic.Model;
-  system_value = this.system.profile.getModel();
+  value = this.system.profile.model;
 }
 
 class AccessoryManufacturer extends CharacteristicWrapper {
   ctype = this.Characteristic.Manufacturer;
-  system_value = this.system.profile.getBrand().pipe(
-    switchMap(x => of(`${x} Home`)),
-  );
+  value = this.system.profile.brand.pipe(map(x => `${x} Home`));
 }
 
 export class AccessoryInformation extends MultiWrapper {

@@ -13,7 +13,7 @@ import Location from './interface_locations';
 import Profile from './interface_profile';
 import Status, {Zone as SZone} from './interface_status';
 import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
-import { combineLatest, throttleTime, from, fromEvent, interval, merge, Observable, switchMap, of, distinctUntilChanged, mergeAll } from 'rxjs';
+import { combineLatest, throttleTime, from, fromEvent, interval, merge, Observable, switchMap, of, distinctUntilChanged, mergeAll, map } from 'rxjs';
 import EventEmitter from 'events';
 
 abstract class BaseModel {
@@ -152,31 +152,10 @@ export class SystemProfileModel extends BaseSystemModel {
     return `/systems/${this.serialNumber}/profile`;
   }
 
-  getName(): Observable<string> {
-    return this.data$.pipe(
-      switchMap(data => of(data.system_profile.name[0])),
-      // TODO do this with all?
-      distinctUntilChanged(),
-    );
-  }
-
-  getBrand(): Observable<string> {
-    return this.data$.pipe(
-      switchMap(data => of(data.system_profile.brand[0])),
-    );
-  }
-
-  getModel(): Observable<string> {
-    return this.data$.pipe(
-      switchMap(data => of(data.system_profile.model[0])),
-    );
-  }
-
-  getFirmware(): Observable<string> {
-    return this.data$.pipe(
-      switchMap(data => of(data.system_profile.firmware[0])),
-    );
-  }
+  public name = this.data$.pipe(map(data => data.system_profile.name[0]), distinctUntilChanged());
+  public brand = this.data$.pipe(map(data => data.system_profile.brand[0]), distinctUntilChanged());
+  public model = this.data$.pipe(map(data => data.system_profile.model[0]), distinctUntilChanged());
+  public firmware = this.data$.pipe(map(data => data.system_profile.firmware[0]), distinctUntilChanged());
 
   async getZones(): Promise<Array<string>> {
     await this.fetch();
@@ -196,20 +175,8 @@ export class SystemStatusModel extends BaseSystemModel {
     return `/systems/${this.serialNumber}/status`;
   }
 
-  async getUnits(): Promise<string> {
-    await this.fetch();
-    return this.data_object.status.cfgem[0];
-  }
-
-  async getOutdoorTemp(): Promise<number> {
-    await this.fetch();
-    return Number(this.data_object.status.oat[0]);
-  }
-
-  async getFilterUsed(): Promise<number> {
-    await this.fetch();
-    return Number(this.data_object.status.filtrlvl[0]);
-  }
+  public outdoor_temp = this.data$.pipe(map(data => Number(data.status.oat[0])), distinctUntilChanged());
+  public filter_used = this.data$.pipe(map(data => Number(data.status.filtrlvl[0])), distinctUntilChanged());
 
   async getMode(): Promise<string> {
     await this.fetch();
