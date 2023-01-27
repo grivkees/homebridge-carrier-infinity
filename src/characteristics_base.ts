@@ -9,6 +9,7 @@ import { PrefixLogger } from './helper_logging';
 import Config from './api/interface_config';
 import Profile from './api/interface_profile';
 import Status from './api/interface_status';
+import { from, Observable, of, switchMap } from 'rxjs';
 /*
 * Helpers to add handlers to the HAP Service and Characteristic objects.
 */
@@ -50,32 +51,47 @@ export abstract class CharacteristicWrapper extends Wrapper {
   protected set: ((value: CharacteristicValue) => Promise<void>) | undefined;
   // used exclusively if no char value is set yet (first accessory load)
   protected default_value: CharacteristicValue | null = null;
+  // Holds an observable of the system/api-based value
+  protected system_value?: Observable<CharacteristicValue>;
 
   wrap(service: Service): void {
     const characteristic = service.getCharacteristic(this.ctype);
     if (this.props) {
       characteristic.setProps(this.props);
     }
+    // TODO get rid of "get" when finished migrating
     if (this.get) {
-      // Subscribe to changes to data model
-      this.system.data$.subscribe(
+      this.system_value = this.system.data$.pipe(
+        switchMap(
+          () => {
+            if (this.get) {
+              return from(this.get());
+            } else {
+              return of(this.default_value!);
+            }
+          },
+        ),
+      );
+    }
+    // Push updates from the system-based value observable to HK
+    if (this.system_value) {
+      this.system_value.subscribe(
         async data => {
-          this.log.warn(`Updating ${this.ctype.name}`); // TODO REMOVE
-          // TODO pass data to the get function
-          if (this.get) {
-            characteristic.updateValue(await this.get());
-          }
+          this.log.warn(`Updating ${this.ctype.name} to ${data}`); // TODO REMOVE
+          characteristic.updateValue(data);
         },
       );
-      characteristic.onGet(async () => {
-        // Tell the system model it should update ...
-        this.system.status.events.emit('onGet');
-        this.system.config.events.emit('onGet');
-        // ... and return immediately
-        // try 1) existing value, if falsy, 2) default value, if null, 3) keep existing value
-        return characteristic.value || this.default_value || characteristic.value;
-      });
     }
+    // Make HK get requests initiate an observable update
+    characteristic.onGet(async () => {
+      // Tell the system model it should update ...
+      this.system.status.events.emit('onGet');
+      this.system.config.events.emit('onGet');
+      // ... and return immediately
+      // try 1) existing value, if falsy, 2) default value, if null, 3) keep existing value
+      return characteristic.value || this.default_value || characteristic.value;
+    });
+    // Sets call set helper which calls system model
     if (this.set) {
       characteristic.onSet(this.set.bind(this));
     }
@@ -117,14 +133,27 @@ export abstract class ThermostatCharacteristicWrapper extends CharacteristicWrap
   }
 }
 
-export class AccessoryInformation extends Wrapper {
-  wrap(service: Service): void {
-    service.updateCharacteristic(this.Characteristic.SerialNumber, this.system.serialNumber);
-    this.system.profile.getModel().subscribe(x => {
-      service.updateCharacteristic(this.Characteristic.Model, x);
-    });
-    this.system.profile.getBrand().subscribe(x => {
-      service.updateCharacteristic(this.Characteristic.Manufacturer, `${x} Home`);
-    });
-  }
+class AccessorySerial extends CharacteristicWrapper {
+  ctype = this.Characteristic.SerialNumber;
+  system_value = of(this.system.serialNumber);
+}
+
+class AccessoryModel extends CharacteristicWrapper {
+  ctype = this.Characteristic.Model;
+  system_value = this.system.profile.getModel();
+}
+
+class AccessoryManufacturer extends CharacteristicWrapper {
+  ctype = this.Characteristic.Manufacturer;
+  system_value = this.system.profile.getBrand().pipe(
+    switchMap(x => of(`${x} Home`)),
+  );
+}
+
+export class AccessoryInformation extends MultiWrapper {
+  WRAPPERS = [
+    AccessorySerial,
+    AccessoryModel,
+    AccessoryManufacturer,
+  ];
 }

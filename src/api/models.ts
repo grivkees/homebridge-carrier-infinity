@@ -47,6 +47,12 @@ abstract class BaseModel {
       switchMap(
         () => from(this.fetch().then(() => this.data_object)),
       ),
+      distinctUntilChanged((prev, cur) => {
+        return (
+          // TODO reuse excluded keys fxn from below
+          hash(prev) === hash(cur)
+        );
+      }),
     );
   }
 
@@ -149,6 +155,8 @@ export class SystemProfileModel extends BaseSystemModel {
   getName(): Observable<string> {
     return this.data$.pipe(
       switchMap(data => of(data.system_profile.name[0])),
+      // TODO do this with all?
+      distinctUntilChanged(),
     );
   }
 
