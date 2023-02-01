@@ -2,9 +2,7 @@ import { CharacteristicWrapper, MultiWrapper } from './characteristics_base';
 
 class CurrentRH extends CharacteristicWrapper {
   ctype = this.Characteristic.CurrentRelativeHumidity;
-  get = async () => {
-    return await this.system.status.getZoneHumidity(this.context.zone);
-  };
+  value = this.system.status.getZone(this.context.zone).humidity;
 }
 
 class TargetDehumidify extends CharacteristicWrapper {

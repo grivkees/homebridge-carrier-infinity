@@ -34,14 +34,6 @@ export class ThermostatAccessory extends BaseAccessory {
     this.system.status.fetch().then();
     this.system.config.fetch().then(async () => {
       this.service.setCharacteristic(this.platform.Characteristic.Name, await this.system.config.getZoneName(this.accessory.context.zone));
-      const temp_bounds = await this.system.config.getTempBounds();
-      const bound_props = {
-        minValue: Number(convertSystemTemp2CharTemp(temp_bounds[0], await this.system.config.getUnits())),
-        maxValue: Number(convertSystemTemp2CharTemp(temp_bounds[1], await this.system.config.getUnits())),
-      };
-      this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps(bound_props);
-      this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).setProps(bound_props);
-      this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).setProps(bound_props);
       // setting name explicitly is needed to not lose the word 'thermostat'
       this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
     });

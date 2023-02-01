@@ -16,6 +16,8 @@ import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
 import { combineLatest, throttleTime, from, fromEvent, interval, merge, Observable, switchMap, of, distinctUntilChanged, mergeAll, map } from 'rxjs';
 import EventEmitter from 'events';
 
+export type TempWithUnit = [number, string];
+
 abstract class BaseModel {
   protected data_object!: object;
   // TODO: is there a way to make the 'typeof' below work with the subclasses
@@ -110,6 +112,8 @@ export class LocationsModel extends BaseModel {
     return `/users/${this.infinity_client.username}/locations`;
   }
 
+  // TODO: decide if this should be observable or not, since its used for
+  // accessory creation.
   async getSystems(): Promise<string[]> {
     await this.fetch();
     const systems: string[] = [];
@@ -157,6 +161,8 @@ export class SystemProfileModel extends BaseSystemModel {
   public model = this.data$.pipe(map(data => data.system_profile.model[0]), distinctUntilChanged());
   public firmware = this.data$.pipe(map(data => data.system_profile.firmware[0]), distinctUntilChanged());
 
+  // TODO: decide if this should be observable or not, since its used for
+  // accessory creation.
   async getZones(): Promise<Array<string>> {
     await this.fetch();
     return this.data_object.system_profile.zones[0].zone.filter(
@@ -177,10 +183,10 @@ export class SystemStatusModel extends BaseSystemModel {
 
   public outdoor_temp = this.data$.pipe(map(data => Number(data.status.oat[0])), distinctUntilChanged());
   public filter_used = this.data$.pipe(map(data => Number(data.status.filtrlvl[0])), distinctUntilChanged());
+  public temp_units = this.data$.pipe(map(data => data.status.cfgem[0]), distinctUntilChanged());
 
-  async getMode(): Promise<string> {
-    await this.fetch();
-    const raw_mode = this.data_object.status.mode[0];
+  public mode = this.data$.pipe(map(data => {
+    const raw_mode = data.status.mode[0];
     switch(raw_mode) {
       case 'gasheat':
       case 'electric':
@@ -191,17 +197,29 @@ export class SystemStatusModel extends BaseSystemModel {
       default:
         return raw_mode;
     }
-  }
+  }), distinctUntilChanged());
 
-  private async getZone(zone: string): Promise<SZone> {
-    await this.fetch();
-    return this.data_object.status.zones[0].zone.find(
-      (z) => z['$'].id === zone.toString(),
-    )!;
-  }
+  private raw_zone_data$ = this.data$.pipe(map(data => data.status.zones[0].zone), distinctUntilChanged());
 
-  async getZoneConditioning(zone: string): Promise<string> {
-    const raw_mode = (await this.getZone(zone)).zoneconditioning![0];
+  public getZone(zone: string): SystemStatusZoneModel {
+    // TODO assert valid zone
+    // TODO save SystemStatusZoneModel to dedup
+    return new SystemStatusZoneModel(this.raw_zone_data$.pipe(map(
+      data => data.find(
+        (z) => z['$'].id === zone.toString(),
+      )!,
+    )), this.temp_units);
+  }
+}
+
+export class SystemStatusZoneModel {
+  constructor(private zone: Observable<SZone>, private temp_units$: Observable<string>) {}
+
+  public mode = this.zone.pipe(map(zone => {
+    if (zone.damperposition[0] === '0') {
+      return SYSTEM_MODE.OFF;
+    }
+    const raw_mode = zone.zoneconditioning[0];
     switch(raw_mode) {
       case 'active_heat':
       case 'prep_heat':
@@ -216,40 +234,35 @@ export class SystemStatusModel extends BaseSystemModel {
       default:
         return raw_mode;
     }
-  }
+  }));
 
-  async getZoneFan(zone: string): Promise<string> {
-    const zone_obj = await this.getZone(zone);
-    if (zone_obj.damperposition![0] === '0') {
+  public fan = this.zone.pipe(map(zone => {
+    if (zone.damperposition[0] === '0') {
       return FAN_MODE.OFF;
     } else {
-      return zone_obj.fan[0];
+      return zone.fan[0];
     }
-  }
+  }));
 
-  async getZoneOpen(zone: string): Promise<boolean> {
-    return (await this.getZone(zone)).damperposition![0] !== '0';
-  }
+  public activity = this.zone.pipe(map(zone => zone.currentActivity[0]));
+  // The zone is blowing if the mode is on or the fan is on
+  public blowing = combineLatest([this.mode, this.fan]).pipe(map(([mode, fan]) => mode !== SYSTEM_MODE.OFF || fan !== FAN_MODE.OFF));
+  // This helps with some edge cases around zoned systems
+  public closed = this.zone.pipe(map(zone => zone.damperposition[0] === '0'));
 
-  async getZoneTemp(zone: string): Promise<number> {
-    return Number((await this.getZone(zone)).rt[0]);
-  }
+  public temp = combineLatest([this.zone, this.temp_units$]).pipe(map(
+    ([zone, temp_units]) => [Number(zone.rt[0]), temp_units] as TempWithUnit),
+  );
 
-  async getZoneHumidity(zone: string): Promise<number> {
-    return Number((await this.getZone(zone)).rh[0]);
-  }
+  public cool_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(map(
+    ([zone, temp_units]) => [Number(zone.clsp[0]), temp_units] as TempWithUnit),
+  );
 
-  async getZoneActivity(zone: string): Promise<string> {
-    return (await this.getZone(zone)).currentActivity![0];
-  }
+  public heat_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(map(
+    ([zone, temp_units]) => [Number(zone.htsp[0]), temp_units] as TempWithUnit),
+  );
 
-  async getZoneCoolSetpoint(zone: string): Promise<number> {
-    return Number((await this.getZone(zone)).clsp[0]);
-  }
-
-  async getZoneHeatSetpoint(zone: string): Promise<number> {
-    return Number((await this.getZone(zone)).htsp[0]);
-  }
+  public humidity = this.zone.pipe(map(zone => Number(zone.rh[0])));
 }
 
 export class SystemConfigModel extends BaseSystemModel {
@@ -260,46 +273,53 @@ export class SystemConfigModel extends BaseSystemModel {
     return `/systems/${this.serialNumber}/config`;
   }
 
+  // TODO: DELETE ME
   async getUnits(): Promise<string> {
     await this.fetch();
     return this.data_object.config.cfgem[0];
   }
 
-  async getTempBounds(): Promise<[number, number]> {
-    await this.fetch();
-    const utility_events = this.data_object.config.utilityEvent[0];
-    return [Number(utility_events.minLimit[0]), Number(utility_events.maxLimit[0])];
+  public mode = this.data$.pipe(map(data => data.config.mode[0]), distinctUntilChanged());
+  public temp_units = this.data$.pipe(map(data => data.config.cfgem[0]), distinctUntilChanged());
+  public temp_bounds = this.data$.pipe(map(data => [
+    [Number(data.config.utilityEvent[0].minLimit[0]), data.config.cfgem[0]] as TempWithUnit,
+    [Number(data.config.utilityEvent[0].maxLimit[0]), data.config.cfgem[0]] as TempWithUnit,
+  ]), distinctUntilChanged());
+
+  private raw_zone_data$ = this.data$.pipe(map(data => data.config.zones[0].zone), distinctUntilChanged());
+
+  public getZone(zone: string): SystemConfigZoneModel {
+    // TODO assert valid zone
+    // TODO save SystemConfigZoneModel to dedup
+    return new SystemConfigZoneModel(this.raw_zone_data$.pipe(map(
+      data => data.find(
+        (z) => z['$'].id === zone.toString(),
+      )!,
+    )), this.temp_units);
   }
 
-  async getMode(): Promise<string> {
+  // TODO: DELETE ME
+  async getZoneName(zone: string): Promise<string> {
     await this.fetch();
-    return this.data_object.config.mode[0];
-  }
-
-  private async getZone(zone: string): Promise<CZone> {
-    await this.fetch();
-    return this.data_object.config.zones[0].zone.find(
+    const zone_obj = this.data_object.config.zones[0].zone.find(
       (z) => z['$'].id === zone.toString(),
     )!;
-  }
 
-  async getZoneName(zone: string): Promise<string> {
-    const zone_obj = await this.getZone(zone);
     return zone_obj['name'][0];
   }
 
-  async getZoneHoldStatus(zone: string): Promise<[string, string]> {
-    const zone_obj = await this.getZone(zone);
-    return [zone_obj['hold'][0], zone_obj['otmr'][0]];
-  }
-
+  // TODO: DELETE ME
   async getZoneActivity(zone: string): Promise<string> {
-    const zone_obj = await this.getZone(zone);
+    await this.fetch();
+    const zone_obj = this.data_object.config.zones[0].zone.find(
+      (z) => z['$'].id === zone.toString(),
+    )!;
+
     if (zone_obj.hold[0] === STATUS.ON) {
       return zone_obj.holdActivity![0];
     } else {
       const now = new Date();
-      const program_obj = (await this.getZone(zone)).program![0];
+      const program_obj = zone_obj.program![0];
       const today_schedule = program_obj.day[now.getDay()].period.filter(period => period.enabled[0] === STATUS.ON).reverse();
       for (const i in today_schedule) {
         const time = today_schedule[i].time[0];
@@ -321,6 +341,7 @@ export class SystemConfigModel extends BaseSystemModel {
     }
   }
 
+  // TODO: DELETE ME
   private async getZoneActivityConfig(zone: string, activity_name: string): Promise<CActivity> {
     await this.fetch();
     // Vacation is stored somewhere else...
@@ -334,47 +355,15 @@ export class SystemConfigModel extends BaseSystemModel {
       };
     }
 
-    const activities_obj = (await this.getZone(zone)).activities![0];
+    const zone_obj = this.data_object.config.zones[0].zone.find(
+      (z) => z['$'].id === zone.toString(),
+    )!;
+    const activities_obj = zone_obj.activities![0];
     return activities_obj['activity'].find(
       (activity: CActivity) => activity['$'].id === activity_name,
     )!;
   }
 
-  async getZoneActivityFan(zone: string, activity: string): Promise<string> {
-    const activity_obj = await this.getZoneActivityConfig(zone, activity);
-    return activity_obj.fan[0];
-  }
-
-  async getZoneActivityCoolSetpoint(zone: string, activity: string): Promise<number> {
-    const activity_obj = await this.getZoneActivityConfig(zone, activity);
-    return Number(activity_obj.clsp[0]);
-  }
-
-  async getZoneActivityHeatSetpoint(zone: string, activity: string): Promise<number> {
-    const activity_obj = await this.getZoneActivityConfig(zone, activity);
-    return Number(activity_obj.htsp[0]);
-  }
-
-  async getZoneNextActivityTime(zone: string): Promise<string> {
-    const now = new Date();
-    const program_obj = (await this.getZone(zone)).program![0];
-    const day_obj = program_obj['day'][now.getDay()];
-    for (const i in day_obj['period']) {
-      const time = day_obj['period'][i].time[0];
-      const split = time.split(':');
-      if (
-        // The hour is nigh
-        Number(split[0]) > now.getHours() ||
-        // The hour is now, the minute is nigh
-        (Number(split[0]) === now.getHours() && Number(split[1]) > now.getMinutes())
-      ) {
-        return time;
-      }
-    }
-    // If we got to the end without finding the next activity, it means the next activity is the first from tomorrow
-    const tomorrow_obj = program_obj['day'][(now.getDay() + 1) % 7];
-    return tomorrow_obj['period'][0].time[0];
-  }
 
   /* Write APIs */
   mutations: (() => Promise<void>)[] = [];
@@ -570,12 +559,91 @@ export class SystemConfigModel extends BaseSystemModel {
   }
 }
 
+export class SystemConfigZoneModel {
+  constructor(private zone: Observable<CZone>, private temp_units$: Observable<string>) {}
+
+  public name = this.zone.pipe(map(zone => zone.name[0]));
+  public hold_status = this.zone.pipe(map(zone => [zone.hold[0], zone.otmr[0]] as [string, string]));
+
+  // TODO Add a unit test to this
+  public activity = this.zone.pipe(map(zone => {
+    if (zone.hold[0] === STATUS.ON) {
+      return zone.holdActivity![0];
+    } else {
+      const now = new Date();
+      const program_obj = zone.program![0];
+      const today_schedule = program_obj.day[now.getDay()].period.filter(period => period.enabled[0] === STATUS.ON).reverse();
+      for (const i in today_schedule) {
+        const time = today_schedule[i].time[0];
+        const split = time.split(':');
+        if (
+          // The hour is past
+          Number(split[0]) < now.getHours() ||
+          // The hour is now, the minute is past
+          (Number(split[0]) === now.getHours() && Number(split[1]) < now.getMinutes())
+        ) {
+          return today_schedule[i].activity[0];
+        }
+      }
+      // If we got to the end without finding the next activity, it means the activity is the last from yesterday
+      const yesterday_schedule = program_obj['day'][(now.getDay() + 8) % 7].period.filter(
+        period => period.enabled[0] === STATUS.ON,
+      ).reverse();
+      return yesterday_schedule[0].activity[0];
+    }
+  }));
+
+  // TODO this could be made better, and more similar to above.
+  // maybe merge into one fxn?
+  public next_activity_time = this.zone.pipe(map(zone => {
+    const now = new Date();
+    const program_obj = zone.program![0];
+    const day_obj = program_obj['day'][now.getDay()];
+    for (const i in day_obj['period']) {
+      const time = day_obj['period'][i].time[0];
+      const split = time.split(':');
+      if (
+        // The hour is nigh
+        Number(split[0]) > now.getHours() ||
+        // The hour is now, the minute is nigh
+        (Number(split[0]) === now.getHours() && Number(split[1]) > now.getMinutes())
+      ) {
+        return time;
+      }
+    }
+    // If we got to the end without finding the next activity, it means the next activity is the first from tomorrow
+    const tomorrow_obj = program_obj['day'][(now.getDay() + 1) % 7];
+    return tomorrow_obj['period'][0].time[0];
+  }));
+
+  private current_activity_config$ = combineLatest([
+    this.zone,
+    this.activity],
+  ).pipe(map(
+    ([zone, activity_name]) => {
+      return zone.activities[0].activity.find(
+        (a) => a['$'].id === activity_name,
+      )!;
+    },
+  ));
+
+  public fan = this.current_activity_config$.pipe(map(activity => activity.fan[0]));
+
+  public cool_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(map(
+    ([activity, temp_units]) => [Number(activity.clsp[0]), temp_units] as TempWithUnit),
+  );
+
+  public heat_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(map(
+    ([activity, temp_units]) => [Number(activity.htsp[0]), temp_units] as TempWithUnit),
+  );
+}
+
 export class SystemModel {
   public status: SystemStatusModel;
   public config: SystemConfigModel;
   public profile: SystemProfileModel;
   public log: Logger = new PrefixLogger(this.infinity_client.log, this.serialNumber);
-  public data$: Observable<[Status, Config, Profile]>;
+  public data$!: Observable<[Status, Config, Profile]>;
 
   constructor(
     protected readonly infinity_client: InfinityRestClient,
@@ -602,5 +670,19 @@ export class SystemModel {
       this.config.data$,
       this.profile.data$,
     ]);
+  }
+
+  public getZoneActivity(zone: string): Observable<string> {
+    return combineLatest([
+      this.status.getZone(zone).activity,
+      this.config.getZone(zone).activity,
+    ]).pipe(map(([s_activity, c_activity]) => {
+      // Vacation scheduling is weird, and changes infrequently. Just get it from status.
+      if (s_activity === ACTIVITY.VACATION) {
+        return ACTIVITY.VACATION;
+      }
+      // Config has more up to date activity settings.
+      return c_activity;
+    }));
   }
 }

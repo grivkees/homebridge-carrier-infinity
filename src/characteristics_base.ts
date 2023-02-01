@@ -46,32 +46,19 @@ export abstract class MultiWrapper extends Wrapper {
 
 export abstract class CharacteristicWrapper extends Wrapper {
   public abstract ctype: WithUUID<new () => Characteristic>;
-  protected props = {};
-  protected get: (() => Promise<CharacteristicValue>) | undefined;
   protected set: ((value: CharacteristicValue) => Promise<void>) | undefined;
   // used exclusively if no char value is set yet (first accessory load)
   protected default_value: CharacteristicValue | null = null;
   // Holds an observable of the system/api-based value
   protected value?: Observable<CharacteristicValue>;
+  protected props?: Observable<object>;
 
   wrap(service: Service): void {
     const characteristic = service.getCharacteristic(this.ctype);
     if (this.props) {
-      characteristic.setProps(this.props);
-    }
-    // TODO get rid of "get" when finished migrating
-    if (this.get) {
-      this.value = this.system.data$.pipe(
-        switchMap(
-          () => {
-            if (this.get) {
-              return from(this.get());
-            } else {
-              return of(this.default_value!);
-            }
-          },
-        ),
-      );
+      this.props.subscribe(async data => {
+        characteristic.setProps(data);
+      });
     }
     // Push updates from the system-based value observable to HK
     if (this.value) {
@@ -101,36 +88,36 @@ export abstract class CharacteristicWrapper extends Wrapper {
 export abstract class ThermostatCharacteristicWrapper extends CharacteristicWrapper {
   // TODO: check in constructor that context has zone and hold settings
 
-  async getActivity(): Promise<string> {
-    // Vacation scheduling is weird, and changes infrequently. Just get it from status.
-    if (await this.system.status.getZoneActivity(this.context.zone) === ACTIVITY.VACATION) {
-      return ACTIVITY.VACATION;
-    }
-    // Config has more up to date activity settings.
-    return await this.system.config.getZoneActivity(this.context.zone);
-  }
+  // async getActivity(): Promise<string> {
+  //   // Vacation scheduling is weird, and changes infrequently. Just get it from status.
+  //   if (await this.system.status.getZoneActivity(this.context.zone) === ACTIVITY.VACATION) {
+  //     return ACTIVITY.VACATION;
+  //   }
+  //   // Config has more up to date activity settings.
+  //   return await this.system.config.getZoneActivity(this.context.zone);
+  // }
 
-  async getHoldTime(): Promise<string> {
-    // OTMR setting to say when manual hold should end
-    switch (this.context.holdBehavior) {
-      case 'activity':
-        return await this.system.config.getZoneNextActivityTime(this.context.zone);
-      case 'for_x': {
-        const arg = this.context.holdArgument.split(':');
-        let target_ms = (new Date()).getTime();
-        target_ms += Number(arg[0]) * 60 * 60 * 1000;
-        target_ms += Number(arg[1]) * 60 * 1000;
-        const target_date = new Date(target_ms);
-        return `${target_date.getHours()}:${target_date.getMinutes()}`.padStart(5, '0');
-      }
-      case 'until_x':
-        return this.context.holdArgument;
-      case 'forever':
-        return '';
-      default:
-        return '';
-    }
-  }
+  // async getHoldTime(): Promise<string> {
+  //   // OTMR setting to say when manual hold should end
+  //   switch (this.context.holdBehavior) {
+  //     case 'activity':
+  //       return await this.system.config.getZoneNextActivityTime(this.context.zone);
+  //     case 'for_x': {
+  //       const arg = this.context.holdArgument.split(':');
+  //       let target_ms = (new Date()).getTime();
+  //       target_ms += Number(arg[0]) * 60 * 60 * 1000;
+  //       target_ms += Number(arg[1]) * 60 * 1000;
+  //       const target_date = new Date(target_ms);
+  //       return `${target_date.getHours()}:${target_date.getMinutes()}`.padStart(5, '0');
+  //     }
+  //     case 'until_x':
+  //       return this.context.holdArgument;
+  //     case 'forever':
+  //       return '';
+  //     default:
+  //       return '';
+  //   }
+  // }
 }
 
 class AccessorySerial extends CharacteristicWrapper {
