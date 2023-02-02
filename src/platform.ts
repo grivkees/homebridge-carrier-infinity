@@ -6,6 +6,7 @@ import { OutdoorTemperatureAccessory } from './accessory_oat';
 import {
   LocationsModel,
   SystemModel,
+  SystemModelSettings,
 } from './api/models';
 import { EnvSensorAccessory } from './accessory_envsensor';
 import { BaseAccessory } from './accessory_base';
@@ -62,7 +63,8 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     const systems = await new LocationsModel(this.infinity_client).getSystems();
     for (const serialNumber of systems) {
       // Create system api object, and save for later reference
-      const system = new SystemModel(this.infinity_client, serialNumber);
+      const system_settings = new SystemModelSettings(this.config);
+      const system = new SystemModel(this.infinity_client, serialNumber, system_settings);
       this.systems[serialNumber] = system;
 
       // Add system based accessories
