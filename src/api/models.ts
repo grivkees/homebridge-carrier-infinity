@@ -13,14 +13,14 @@ import Location from './interface_locations';
 import Profile from './interface_profile';
 import Status, {Zone as SZone} from './interface_status';
 import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
-import { combineLatest, throttleTime, from, fromEvent, interval, merge, Observable, switchMap, of, distinctUntilChanged, mergeAll, map, filter } from 'rxjs';
+import { combineLatest, throttleTime, from, fromEvent, interval, merge, Observable, switchMap, of, distinctUntilChanged, mergeAll, map, filter, Subject } from 'rxjs';
 import EventEmitter from 'events';
 
 export type TempWithUnit = [number, string];
 
 abstract class BaseModel<T extends object> {
   protected data_object!: T;
-  public data$: Observable<T>;
+  public data$ = new Subject<T>();
   protected data_object_hash?: string;
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
@@ -43,13 +43,10 @@ abstract class BaseModel<T extends object> {
       fromEvent(this.events, 'onGet'),
     // Throttle to ignore events in quick succession
     ).pipe(throttleTime(10000));
-    // Use trigger to update data model
-    ticks.subscribe(data => {
-      this.log.debug(`TICK ${data}`);
-    });
-    this.data$ = ticks.pipe(
+    // Use these 'ticks' triggers to update the data ...
+    ticks.pipe(
       switchMap(
-        () => from(this.fetch()),
+        () => from(this.forceFetch()),
       ),
       distinctUntilChanged((prev, cur) => {
         return (
@@ -57,7 +54,8 @@ abstract class BaseModel<T extends object> {
           hash(prev) === hash(cur)
         );
       }),
-    );
+    // ... and send the response to the Subject/Observable.
+    ).subscribe(this.data$);
   }
 
   abstract getPath(): string;
@@ -81,7 +79,6 @@ abstract class BaseModel<T extends object> {
     } catch (e) {
       if (e === E_ALREADY_LOCKED) {
         this.log.debug('Skipping fetch. Preparing to push data to carrier api.');
-        return this.data_object; // TODO REMOVE ME
       } else if (e === E_TIMEOUT || e === E_CANCELED) {
         this.log.error(`Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
       } else {
@@ -91,7 +88,7 @@ abstract class BaseModel<T extends object> {
         );
       }
     }
-    return this.data_object; // TODO REMOVE ME
+    return this.data_object;
   }
 
   protected async forceFetch(): Promise<T> {
