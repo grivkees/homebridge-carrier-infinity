@@ -30,6 +30,9 @@ import {
 } from 'rxjs';
 import EventEmitter from 'events';
 
+// TODO: add district to all pipes
+// TODO: change public to read only
+
 export type TempWithUnit = [number, string];
 
 abstract class BaseModel<T extends object> {
@@ -100,10 +103,7 @@ export class LocationsModel extends BaseModel<Location> {
     return `/users/${this.infinity_client.username}/locations`;
   }
 
-  // TODO: decide if this should be observable or not, since its used for
-  // accessory creation.
-  async getSystems(): Promise<string[]> {
-    const data = await firstValueFrom(this.data$);
+  public system_serials = this.data$.pipe(map(data => {
     const systems: string[] = [];
     for (const location of data.locations.location) {
       for (const system of location.systems[0].system || []) {
@@ -112,7 +112,7 @@ export class LocationsModel extends BaseModel<Location> {
       }
     }
     return systems;
-  }
+  }));
 }
 
 abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
@@ -147,16 +147,13 @@ export class SystemProfileModel extends BaseSystemModel<Profile> {
   public model = this.data$.pipe(map(data => data.system_profile.model[0]), distinctUntilChanged());
   public firmware = this.data$.pipe(map(data => data.system_profile.firmware[0]), distinctUntilChanged());
 
-  // TODO: decide if this should be observable or not, since its used for
-  // accessory creation.
-  async getZones(): Promise<Array<string>> {
-    const data = await firstValueFrom(this.data$);
+  public zone_ids = this.data$.pipe(map(data => {
     return data.system_profile.zones[0].zone.filter(
       (zone: { present: string[] }) => zone['present'][0] === STATUS.ON,
     ).map(
       (zone) => zone['$'].id,
     );
-  }
+  }));
 }
 
 export class SystemStatusModel extends BaseSystemModel<Status> {

@@ -11,6 +11,7 @@ import { EnvSensorAccessory } from './accessory_envsensor';
 import { BaseAccessory } from './accessory_base';
 import { ComfortActivityAccessory } from './accessory_comfort_activity';
 import { InfinityRestClient } from './api/rest_client';
+import { firstValueFrom } from 'rxjs';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -61,7 +62,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
 
   async discoverSystems(): Promise<void> {
     const locations = await new LocationsModel(this.infinity_client);
-    const systems = await locations.getSystems();
+    const systems = await firstValueFrom(locations.system_serials);
     for (const serialNumber of systems) {
       // Create system api object, and save for later reference
       const system = await new SystemModel(this.infinity_client, serialNumber);
@@ -79,7 +80,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       }
 
       // Add system+zone based accessories
-      const zones = await system.profile.getZones();
+      const zones = await firstValueFrom(system.profile.zone_ids);
       for (const zone of zones) {  // 'of' makes sure we go through zone ids, not index
         const context_zone = {...context_system, zone: zone};
         system.log.debug(`Discovered zone ${context_zone.zone}`);
