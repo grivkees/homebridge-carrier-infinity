@@ -67,7 +67,7 @@ class TargetACState extends ThermostatCharacteristicWrapper {
 }
 
 class DisplayUnits extends ThermostatCharacteristicWrapper {
-  ctype = this.Characteristic.CurrentTemperature;
+  ctype = this.Characteristic.TemperatureDisplayUnits;
   get = async () => {
     return await this.system.config.getUnits() === 'F' ?
       this.Characteristic.TemperatureDisplayUnits.FAHRENHEIT :
