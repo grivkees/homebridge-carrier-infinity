@@ -3,9 +3,6 @@ import { Service } from 'homebridge';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 
 import { FilterService } from './characteristics_filter';
-import {
-  convertSystemTemp2CharTemp,
-} from './helpers';
 import { ThermostatRHService } from './characteristics_humidity';
 import { FanService } from './characteristics_fan';
 import { ACService } from './characteristics_ac';

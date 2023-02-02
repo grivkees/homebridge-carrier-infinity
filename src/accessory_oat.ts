@@ -2,7 +2,7 @@ import { CarrierInfinityHomebridgePlatform } from './platform';
 import { AccessoryInformation, CharacteristicWrapper, MultiWrapper } from './characteristics_base';
 import { convertSystemTemp2CharTemp } from './helpers';
 import { BaseAccessory } from './accessory_base';
-import { map, of, switchMap } from 'rxjs';
+import { map } from 'rxjs';
 
 class OATSensorTemp extends CharacteristicWrapper {
   ctype = this.Characteristic.CurrentTemperature;

@@ -1,4 +1,4 @@
-import { map, of, switchMap } from 'rxjs';
+import { map } from 'rxjs';
 import { CharacteristicWrapper, MultiWrapper } from './characteristics_base';
 
 class FilterLife extends CharacteristicWrapper {

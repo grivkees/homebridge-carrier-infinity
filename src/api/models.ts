@@ -13,7 +13,20 @@ import Location from './interface_locations';
 import Profile from './interface_profile';
 import Status, {Zone as SZone} from './interface_status';
 import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
-import { combineLatest, throttleTime, from, fromEvent, interval, merge, Observable, switchMap, of, distinctUntilChanged, mergeAll, map, filter, Subject } from 'rxjs';
+import {
+  combineLatest,
+  distinctUntilChanged,
+  from,
+  fromEvent,
+  interval,
+  map,
+  merge,
+  Observable,
+  of,
+  switchMap,
+  Subject,
+  throttleTime,
+} from 'rxjs';
 import EventEmitter from 'events';
 
 export type TempWithUnit = [number, string];

@@ -6,10 +6,7 @@ import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { PrefixLogger } from './helper_logging';
 
-import Config from './api/interface_config';
-import Profile from './api/interface_profile';
-import Status from './api/interface_status';
-import { from, map, Observable, of, switchMap } from 'rxjs';
+import { map, Observable, of } from 'rxjs';
 /*
 * Helpers to add handlers to the HAP Service and Characteristic objects.
 */
