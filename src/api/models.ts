@@ -61,25 +61,28 @@ abstract class BaseModel<T extends object> {
       switchMap(
         () => from(this.forceFetch()),
       ),
-      distinctUntilChanged((prev, cur) => {
-        return (
-          // TODO reuse excluded keys fxn from below
-          hash(prev) === hash(cur)
-        );
-      }),
+      distinctUntilChanged((prev, cur) => this.isUnchanged(prev, cur)),
     // ... and send the response to the Subject/Observable.
     ).subscribe(this.data$);
   }
 
   abstract getPath(): string;
 
-  protected hashDataObject(): string {
+  protected isUnchanged(x: T, y: T): boolean {
+    return this.hash(x) === this.hash(y);
+  }
+
+  protected hash(data: T): string {
     return hash(
-      this.data_object,
+      data,
       {excludeKeys: (key) => {
         return this.HASH_IGNORE_KEYS.has(key);
       }},
     );
+  }
+
+  protected hashDataObject(): string {
+    return this.hash(this.data_object);
   }
 
   @MemoizeExpiring(10 * 1000)
@@ -109,7 +112,7 @@ abstract class BaseModel<T extends object> {
     await this.infinity_client.activate();
     const response = await this.infinity_client.axios.get(this.getPath());
     if (response.data) {
-      this.data_object = await xml2js.parseStringPromise(response.data) as T;
+      this.data_object = await xml2js.parseStringPromise(response.data);
       this.data_object_hash = this.hashDataObject();
       return this.data_object;
     } else {
