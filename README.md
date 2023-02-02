@@ -31,5 +31,5 @@ This is a standalone plugin for Homebridge that talks directly to the Infinity/E
 
 # Development
 
-[![GitHub Workflow Status (branch)](https://img.shields.io/github/workflow/status/grivkees/homebridge-carrier-infinity/Build,%20Lint,%20Test/master?logo=github-actions&logoColor=white)](https://github.com/grivkees/homebridge-carrier-infinity/actions/workflows/build.yml)
+[![GitHub Workflow Status (branch)](https://img.shields.io/github/actions/workflow/status/grivkees/homebridge-carrier-infinity/build.yml?branch=master&logo=github-actions&logoColor=white)](https://github.com/grivkees/homebridge-carrier-infinity/actions/workflows/build.yml)
 [![npm (tag)](https://img.shields.io/npm/v/homebridge-carrier-infinity/next)](https://www.npmjs.com/package/homebridge-carrier-infinity/v/next)
