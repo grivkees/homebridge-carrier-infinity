@@ -26,14 +26,7 @@ export class ThermostatAccessory extends BaseAccessory {
     this.service = this.accessory.getService(
       this.platform.Service.Thermostat) || this.accessory.addService(this.platform.Service.Thermostat,
     );
-
-    // Create accessory api bridge
-    this.system.status.fetch().then();
-    this.system.config.fetch().then(async () => {
-      this.service.setCharacteristic(this.platform.Characteristic.Name, await this.system.config.getZoneName(this.accessory.context.zone));
-      // setting name explicitly is needed to not lose the word 'thermostat'
-      this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
-    });
+    this.service.setCharacteristic(this.platform.Characteristic.Name, this.context.name);
 
     // Accessory service handler
     new AccessoryInformation(
@@ -73,13 +66,10 @@ export class ThermostatAccessory extends BaseAccessory {
 
   setupFanService(): void {
     this.fan_service = this.fan_service || this.accessory.addService(this.platform.Service.Fanv2);
-
-    this.system.config.fetch().then(async () => {
-      this.fan_service?.setCharacteristic(
-        this.platform.Characteristic.Name,
-        await this.system.config.getZoneName(this.accessory.context.zone) + ' Fan',
-      );
-    });
+    this.fan_service.setCharacteristic(
+      this.platform.Characteristic.Name,
+      this.context.name.replace('Thermostat', 'Fan'), // TODO: this is a hack
+    );
 
     new FanService(
       this.platform,

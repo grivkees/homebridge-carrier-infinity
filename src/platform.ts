@@ -42,6 +42,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     this.api.on('didFinishLaunching', () => {
       this.discoverSystems().then().catch(error => {
         this.log.error('Could not discover devices: ' + error.message);
+        this.log.debug(error);
       });
     });
 
@@ -59,10 +60,11 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   }
 
   async discoverSystems(): Promise<void> {
-    const systems = await new LocationsModel(this.infinity_client).getSystems();
+    const locations = await new LocationsModel(this.infinity_client);
+    const systems = await locations.getSystems();
     for (const serialNumber of systems) {
       // Create system api object, and save for later reference
-      const system = new SystemModel(this.infinity_client, serialNumber);
+      const system = await new SystemModel(this.infinity_client, serialNumber);
       this.systems[serialNumber] = system;
 
       // Add system based accessories

@@ -16,6 +16,7 @@ import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
 import {
   combineLatest,
   distinctUntilChanged,
+  firstValueFrom,
   from,
   fromEvent,
   interval,
@@ -23,8 +24,8 @@ import {
   merge,
   Observable,
   of,
+  ReplaySubject,
   switchMap,
-  Subject,
   throttleTime,
 } from 'rxjs';
 import EventEmitter from 'events';
@@ -32,9 +33,9 @@ import EventEmitter from 'events';
 export type TempWithUnit = [number, string];
 
 abstract class BaseModel<T extends object> {
-  protected data_object!: T;
-  public data$ = new Subject<T>();
-  protected data_object_hash?: string;
+  // protected data_object!: T; // TODO REMOVE
+  public data$ = new ReplaySubject<T>(1);
+  // protected data_object_hash?: string;  // TODO REMOVE
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
   protected log: Logger = new PrefixLogger(this.infinity_client.log, 'API');
@@ -56,13 +57,13 @@ abstract class BaseModel<T extends object> {
       fromEvent(this.events, 'onGet'),
     // Throttle to ignore events in quick succession
     ).pipe(throttleTime(10000));
-    // Use these 'ticks' triggers to update the data ...
+    // Use these 'ticks' triggers to update the data.
     ticks.pipe(
       switchMap(
         () => from(this.forceFetch()),
       ),
       distinctUntilChanged((prev, cur) => this.isUnchanged(prev, cur)),
-    // ... and send the response to the Subject/Observable.
+    // Send data to the BehaviorSubject/Observable.
     ).subscribe(this.data$);
   }
 
@@ -81,40 +82,12 @@ abstract class BaseModel<T extends object> {
     );
   }
 
-  protected hashDataObject(): string {
-    return this.hash(this.data_object);
-  }
-
-  @MemoizeExpiring(10 * 1000)
-  async fetch(): Promise<T> {
-    // If push is ongoing, skip this update fetch. The push will do a fetch.
-    try {
-      await tryAcquire(this.write_lock).runExclusive(async () => {
-        return await this.forceFetch();
-      });
-    } catch (e) {
-      if (e === E_ALREADY_LOCKED) {
-        this.log.debug('Skipping fetch. Preparing to push data to carrier api.');
-      } else if (e === E_TIMEOUT || e === E_CANCELED) {
-        this.log.error(`Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
-      } else {
-        this.log.error(
-          'Failed to fetch updates: ',
-          Axios.isAxiosError(e) ? e.message : e,
-        );
-      }
-    }
-    return this.data_object;
-  }
-
   protected async forceFetch(): Promise<T> {
     await this.infinity_client.refreshToken();
     await this.infinity_client.activate();
     const response = await this.infinity_client.axios.get(this.getPath());
     if (response.data) {
-      this.data_object = await xml2js.parseStringPromise(response.data);
-      this.data_object_hash = this.hashDataObject();
-      return this.data_object;
+      return await xml2js.parseStringPromise(response.data);
     } else {
       this.log.debug(response.data);
       throw new Error('Response from API contained errors.');
@@ -130,9 +103,9 @@ export class LocationsModel extends BaseModel<Location> {
   // TODO: decide if this should be observable or not, since its used for
   // accessory creation.
   async getSystems(): Promise<string[]> {
-    await this.fetch();
+    const data = await firstValueFrom(this.data$);
     const systems: string[] = [];
-    for (const location of this.data_object.locations.location) {
+    for (const location of data.locations.location) {
       for (const system of location.systems[0].system || []) {
         const link_parts = system['atom:link'][0]['$']['href'].split('/');
         systems.push(link_parts[link_parts.length - 1]);
@@ -156,8 +129,8 @@ abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
 
   protected async forceFetch(): Promise<T> {
     const data_object = await super.forceFetch();
-    const top_level_key = Object.keys(this.data_object)[0];
-    const ts = this.data_object[top_level_key].timestamp[0];
+    const top_level_key = Object.keys(data_object)[0];
+    const ts = data_object[top_level_key].timestamp[0];
     this.last_updated = Date.parse(ts);
     this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_updated})`);
     return data_object;
@@ -177,8 +150,8 @@ export class SystemProfileModel extends BaseSystemModel<Profile> {
   // TODO: decide if this should be observable or not, since its used for
   // accessory creation.
   async getZones(): Promise<Array<string>> {
-    await this.fetch();
-    return this.data_object.system_profile.zones[0].zone.filter(
+    const data = await firstValueFrom(this.data$);
+    return data.system_profile.zones[0].zone.filter(
       (zone: { present: string[] }) => zone['present'][0] === STATUS.ON,
     ).map(
       (zone) => zone['$'].id,
@@ -282,8 +255,8 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
   // TODO: DELETE ME
   async getUnits(): Promise<string> {
-    await this.fetch();
-    return this.data_object.config.cfgem[0];
+    const data = await firstValueFrom(this.data$);
+    return data.config.cfgem[0];
   }
 
   public mode = this.data$.pipe(map(data => data.config.mode[0]), distinctUntilChanged());
@@ -307,8 +280,8 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
   // TODO: DELETE ME
   async getZoneName(zone: string): Promise<string> {
-    await this.fetch();
-    const zone_obj = this.data_object.config.zones[0].zone.find(
+    const data = await firstValueFrom(this.data$);
+    const zone_obj = data.config.zones[0].zone.find(
       (z) => z['$'].id === zone.toString(),
     )!;
 
@@ -317,8 +290,8 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
   // TODO: DELETE ME
   async getZoneActivity(zone: string): Promise<string> {
-    await this.fetch();
-    const zone_obj = this.data_object.config.zones[0].zone.find(
+    const data = await firstValueFrom(this.data$);
+    const zone_obj = data.config.zones[0].zone.find(
       (z) => z['$'].id === zone.toString(),
     )!;
 
@@ -350,19 +323,19 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
   // TODO: DELETE ME
   private async getZoneActivityConfig(zone: string, activity_name: string): Promise<CActivity> {
-    await this.fetch();
+    const data = await firstValueFrom(this.data$);
     // Vacation is stored somewhere else...
     if (activity_name === ACTIVITY.VACATION) {
       return {
         '$': {id: ACTIVITY.VACATION},
-        clsp: this.data_object.config.vacmaxt,
-        htsp: this.data_object.config.vacmint,
-        fan: this.data_object.config.vacfan,
+        clsp: data.config.vacmaxt,
+        htsp: data.config.vacmint,
+        fan: data.config.vacfan,
         previousFan: [],
       };
     }
 
-    const zone_obj = this.data_object.config.zones[0].zone.find(
+    const zone_obj = data.config.zones[0].zone.find(
       (z) => z['$'].id === zone.toString(),
     )!;
     const activities_obj = zone_obj.activities![0];
@@ -399,7 +372,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
         // 3. Confirm
         await new Promise(r => setTimeout(r, 5000));
         await this.forceFetch();
-        if (mutated_hash === this.data_object_hash) {
+        if (mutated_hash === this.hash(await firstValueFrom(this.data$))) {
           this.log.debug('Successful propagation to carrier api is confirmed.');
         } else {
           this.log.warn('Changes do not (yet?) appear to have propagated to the carrier api.');
@@ -420,15 +393,18 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   }
 
   private async mutate(): Promise<string | null> {
+    const data = await firstValueFrom(this.data$);
+
+    // TODO most of this hash checking is no longer valid
     // short circuit if no mutations in queue
     if (this.mutations.length === 0) {
       return null;
     }
 
     // Refresh config.
-    const old_hash = this.data_object_hash;
+    const old_hash = this.hash(data);
     await this.forceFetch();
-    if (old_hash !== this.data_object_hash) {
+    if (old_hash !== this.hash(data)) {
       this.log.warn('Cached config was stale before mutation and push.');
     }
 
@@ -441,7 +417,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
         await m();
       }
     }
-    const mutated_hash = this.hashDataObject();
+    const mutated_hash = this.hash(data);
 
     // If nothing actually changed, no need to push.
     if (old_hash === mutated_hash) {
@@ -455,7 +431,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   private async forcePush(): Promise<void> {
     this.log.info('Pushing changes to carrier api...');
     const builder = new xml2js.Builder();
-    const new_xml = builder.buildObject(this.data_object);
+    const new_xml = builder.buildObject(await firstValueFrom(this.data$));
     const data = `data=${encodeURIComponent(new_xml)}`;
     await this.infinity_client.axios.post(
       this.getPath(),
@@ -478,7 +454,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
   private mutateMode(mode: string): void {
     this.log.debug('Setting mode to ' + mode);
-    this.data_object.config.mode[0] = mode;
+    // this.data$.value.config.mode[0] = mode; // TODO fix
   }
 
   async setZoneActivityHold(
@@ -672,11 +648,6 @@ export class SystemModel {
       serialNumber,
       api_logger,
     );
-    this.data$ = combineLatest([
-      this.status.data$,
-      this.config.data$,
-      this.profile.data$,
-    ]);
   }
 
   public getZoneActivity(zone: string): Observable<string> {
