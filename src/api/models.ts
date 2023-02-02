@@ -30,7 +30,6 @@ import {
 } from 'rxjs';
 import EventEmitter from 'events';
 
-// TODO: add district to all pipes
 // TODO: change public to read only
 
 export type TempWithUnit = [number, string];
@@ -112,7 +111,7 @@ export class LocationsModel extends BaseModel<Location> {
       }
     }
     return systems;
-  }));
+  }), distinctUntilChanged());
 }
 
 abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
@@ -153,7 +152,7 @@ export class SystemProfileModel extends BaseSystemModel<Profile> {
     ).map(
       (zone) => zone['$'].id,
     );
-  }));
+  }), distinctUntilChanged());
 }
 
 export class SystemStatusModel extends BaseSystemModel<Status> {
@@ -214,7 +213,7 @@ export class SystemStatusZoneModel {
       default:
         return raw_mode;
     }
-  }));
+  }), distinctUntilChanged());
 
   public fan = this.zone.pipe(map(zone => {
     if (zone.damperposition[0] === '0') {
@@ -222,27 +221,34 @@ export class SystemStatusZoneModel {
     } else {
       return zone.fan[0];
     }
-  }));
+  }), distinctUntilChanged());
 
-  public activity = this.zone.pipe(map(zone => zone.currentActivity[0]));
+  public activity = this.zone.pipe(map(zone => zone.currentActivity[0]), distinctUntilChanged());
   // The zone is blowing if the mode is on or the fan is on
-  public blowing = combineLatest([this.mode, this.fan]).pipe(map(([mode, fan]) => mode !== SYSTEM_MODE.OFF || fan !== FAN_MODE.OFF));
+  public blowing = combineLatest([this.mode, this.fan]).pipe(
+    map(([mode, fan]) => mode !== SYSTEM_MODE.OFF || fan !== FAN_MODE.OFF),
+    distinctUntilChanged(),
+  );
+
   // This helps with some edge cases around zoned systems
-  public closed = this.zone.pipe(map(zone => zone.damperposition[0] === '0'));
+  public closed = this.zone.pipe(map(zone => zone.damperposition[0] === '0'), distinctUntilChanged());
 
-  public temp = combineLatest([this.zone, this.temp_units$]).pipe(map(
-    ([zone, temp_units]) => [Number(zone.rt[0]), temp_units] as TempWithUnit),
+  public temp = combineLatest([this.zone, this.temp_units$]).pipe(
+    map(([zone, temp_units]) => [Number(zone.rt[0]), temp_units] as TempWithUnit),
+    distinctUntilChanged(),
   );
 
-  public cool_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(map(
-    ([zone, temp_units]) => [Number(zone.clsp[0]), temp_units] as TempWithUnit),
+  public cool_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(
+    map(([zone, temp_units]) => [Number(zone.clsp[0]), temp_units] as TempWithUnit),
+    distinctUntilChanged(),
   );
 
-  public heat_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(map(
-    ([zone, temp_units]) => [Number(zone.htsp[0]), temp_units] as TempWithUnit),
+  public heat_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(
+    map(([zone, temp_units]) => [Number(zone.htsp[0]), temp_units] as TempWithUnit),
+    distinctUntilChanged(),
   );
 
-  public humidity = this.zone.pipe(map(zone => Number(zone.rh[0])));
+  public humidity = this.zone.pipe(map(zone => Number(zone.rh[0])), distinctUntilChanged());
 }
 
 export class SystemConfigModel extends BaseSystemModel<Config> {
@@ -542,8 +548,8 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 export class SystemConfigZoneModel {
   constructor(private zone: Observable<CZone>, private temp_units$: Observable<string>) {}
 
-  public name = this.zone.pipe(map(zone => zone.name[0]));
-  public hold_status = this.zone.pipe(map(zone => [zone.hold[0], zone.otmr[0]] as [string, string]));
+  public name = this.zone.pipe(map(zone => zone.name[0]), distinctUntilChanged());
+  public hold_status = this.zone.pipe(map(zone => [zone.hold[0], zone.otmr[0]] as [string, string]), distinctUntilChanged());
 
   // TODO Add a unit test to this
   public activity = this.zone.pipe(map(zone => {
@@ -571,7 +577,7 @@ export class SystemConfigZoneModel {
       ).reverse();
       return yesterday_schedule[0].activity[0];
     }
-  }));
+  }), distinctUntilChanged());
 
   // TODO this could be made better, and more similar to above.
   // maybe merge into one fxn?
@@ -594,7 +600,7 @@ export class SystemConfigZoneModel {
     // If we got to the end without finding the next activity, it means the next activity is the first from tomorrow
     const tomorrow_obj = program_obj['day'][(now.getDay() + 1) % 7];
     return tomorrow_obj['period'][0].time[0];
-  }));
+  }), distinctUntilChanged());
 
   private current_activity_config$ = combineLatest([
     this.zone,
@@ -605,16 +611,18 @@ export class SystemConfigZoneModel {
         (a) => a['$'].id === activity_name,
       )!;
     },
-  ));
+  ), distinctUntilChanged());
 
-  public fan = this.current_activity_config$.pipe(map(activity => activity.fan[0]));
+  public fan = this.current_activity_config$.pipe(map(activity => activity.fan[0]), distinctUntilChanged());
 
-  public cool_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(map(
-    ([activity, temp_units]) => [Number(activity.clsp[0]), temp_units] as TempWithUnit),
+  public cool_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(
+    map(([activity, temp_units]) => [Number(activity.clsp[0]), temp_units] as TempWithUnit),
+    distinctUntilChanged(),
   );
 
-  public heat_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(map(
-    ([activity, temp_units]) => [Number(activity.htsp[0]), temp_units] as TempWithUnit),
+  public heat_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(
+    map(([activity, temp_units]) => [Number(activity.htsp[0]), temp_units] as TempWithUnit),
+    distinctUntilChanged(),
   );
 }
 
@@ -651,13 +659,16 @@ export class SystemModel {
     return combineLatest([
       this.status.getZone(zone).activity,
       this.config.getZone(zone).activity,
-    ]).pipe(map(([s_activity, c_activity]) => {
-      // Vacation scheduling is weird, and changes infrequently. Just get it from status.
-      if (s_activity === ACTIVITY.VACATION) {
-        return ACTIVITY.VACATION;
-      }
-      // Config has more up to date activity settings.
-      return c_activity;
-    }));
+    ]).pipe(
+      map(([s_activity, c_activity]) => {
+        // Vacation scheduling is weird, and changes infrequently. Just get it from status.
+        if (s_activity === ACTIVITY.VACATION) {
+          return ACTIVITY.VACATION;
+        }
+        // Config has more up to date activity settings.
+        return c_activity;
+      }),
+      distinctUntilChanged(),
+    );
   }
 }
