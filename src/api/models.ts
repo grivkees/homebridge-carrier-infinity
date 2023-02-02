@@ -13,15 +13,14 @@ import Location from './interface_locations';
 import Profile from './interface_profile';
 import Status, {Zone as SZone} from './interface_status';
 import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
-import { combineLatest, throttleTime, from, fromEvent, interval, merge, Observable, switchMap, of, distinctUntilChanged, mergeAll, map } from 'rxjs';
+import { combineLatest, throttleTime, from, fromEvent, interval, merge, Observable, switchMap, of, distinctUntilChanged, mergeAll, map, filter } from 'rxjs';
 import EventEmitter from 'events';
 
 export type TempWithUnit = [number, string];
 
-abstract class BaseModel {
-  protected data_object!: object;
-  // TODO: is there a way to make the 'typeof' below work with the subclasses
-  public data$: Observable<typeof this.data_object>;
+abstract class BaseModel<T extends object> {
+  protected data_object!: T;
+  public data$: Observable<T>;
   protected data_object_hash?: string;
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
@@ -45,9 +44,12 @@ abstract class BaseModel {
     // Throttle to ignore events in quick succession
     ).pipe(throttleTime(10000));
     // Use trigger to update data model
+    ticks.subscribe(data => {
+      this.log.debug(`TICK ${data}`);
+    });
     this.data$ = ticks.pipe(
       switchMap(
-        () => from(this.fetch().then(() => this.data_object)),
+        () => from(this.fetch()),
       ),
       distinctUntilChanged((prev, cur) => {
         return (
@@ -70,15 +72,16 @@ abstract class BaseModel {
   }
 
   @MemoizeExpiring(10 * 1000)
-  async fetch(): Promise<void> {
+  async fetch(): Promise<T> {
     // If push is ongoing, skip this update fetch. The push will do a fetch.
     try {
       await tryAcquire(this.write_lock).runExclusive(async () => {
-        await this.forceFetch();
+        return await this.forceFetch();
       });
     } catch (e) {
       if (e === E_ALREADY_LOCKED) {
-        return;
+        this.log.debug('Skipping fetch. Preparing to push data to carrier api.');
+        return this.data_object; // TODO REMOVE ME
       } else if (e === E_TIMEOUT || e === E_CANCELED) {
         this.log.error(`Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
       } else {
@@ -88,15 +91,17 @@ abstract class BaseModel {
         );
       }
     }
+    return this.data_object; // TODO REMOVE ME
   }
 
-  protected async forceFetch(): Promise<void> {
+  protected async forceFetch(): Promise<T> {
     await this.infinity_client.refreshToken();
     await this.infinity_client.activate();
     const response = await this.infinity_client.axios.get(this.getPath());
     if (response.data) {
-      this.data_object = await xml2js.parseStringPromise(response.data) as object;
+      this.data_object = await xml2js.parseStringPromise(response.data) as T;
       this.data_object_hash = this.hashDataObject();
+      return this.data_object;
     } else {
       this.log.debug(response.data);
       throw new Error('Response from API contained errors.');
@@ -104,10 +109,7 @@ abstract class BaseModel {
   }
 }
 
-export class LocationsModel extends BaseModel {
-  protected data_object!: Location;
-  public data$!: Observable<Location>;
-
+export class LocationsModel extends BaseModel<Location> {
   getPath(): string {
     return `/users/${this.infinity_client.username}/locations`;
   }
@@ -127,7 +129,7 @@ export class LocationsModel extends BaseModel {
   }
 }
 
-abstract class BaseSystemModel extends BaseModel {
+abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
   private last_updated = 0;  // TODO use this
   protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime']);
 
@@ -139,19 +141,17 @@ abstract class BaseSystemModel extends BaseModel {
     super(infinity_client);
   }
 
-  protected async forceFetch(): Promise<void> {
-    await super.forceFetch();
+  protected async forceFetch(): Promise<T> {
+    const data_object = await super.forceFetch();
     const top_level_key = Object.keys(this.data_object)[0];
     const ts = this.data_object[top_level_key].timestamp[0];
     this.last_updated = Date.parse(ts);
     this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_updated})`);
+    return data_object;
   }
 }
 
-export class SystemProfileModel extends BaseSystemModel {
-  protected data_object!: Profile;
-  public data$!: Observable<Profile>;
-
+export class SystemProfileModel extends BaseSystemModel<Profile> {
   getPath(): string {
     return `/systems/${this.serialNumber}/profile`;
   }
@@ -173,10 +173,7 @@ export class SystemProfileModel extends BaseSystemModel {
   }
 }
 
-export class SystemStatusModel extends BaseSystemModel {
-  protected data_object!: Status;
-  public data$!: Observable<Status>;
-
+export class SystemStatusModel extends BaseSystemModel<Status> {
   getPath(): string {
     return `/systems/${this.serialNumber}/status`;
   }
@@ -265,10 +262,7 @@ export class SystemStatusZoneModel {
   public humidity = this.zone.pipe(map(zone => Number(zone.rh[0])));
 }
 
-export class SystemConfigModel extends BaseSystemModel {
-  protected data_object!: Config;
-  public data$!: Observable<Config>;
-
+export class SystemConfigModel extends BaseSystemModel<Config> {
   getPath(): string {
     return `/systems/${this.serialNumber}/config`;
   }
