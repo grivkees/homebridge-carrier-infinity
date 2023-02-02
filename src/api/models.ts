@@ -35,9 +35,7 @@ import EventEmitter from 'events';
 export type TempWithUnit = [number, string];
 
 abstract class BaseModel<T extends object> {
-  // protected data_object!: T; // TODO REMOVE
   public data$ = new ReplaySubject<T>(1);
-  // protected data_object_hash?: string;  // TODO REMOVE
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
   protected log: Logger = new PrefixLogger(this.infinity_client.log, 'API');
@@ -256,12 +254,6 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     return `/systems/${this.serialNumber}/config`;
   }
 
-  // TODO: DELETE ME
-  async getUnits(): Promise<string> {
-    const data = await firstValueFrom(this.data$);
-    return data.config.cfgem[0];
-  }
-
   public mode = this.data$.pipe(map(data => data.config.mode[0]), distinctUntilChanged());
   public temp_units = this.data$.pipe(map(data => data.config.cfgem[0]), distinctUntilChanged());
   public temp_bounds = this.data$.pipe(map(data => [
@@ -279,16 +271,6 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
         (z) => z['$'].id === zone.toString(),
       )!,
     )), this.temp_units);
-  }
-
-  // TODO: DELETE ME
-  async getZoneName(zone: string): Promise<string> {
-    const data = await firstValueFrom(this.data$);
-    const zone_obj = data.config.zones[0].zone.find(
-      (z) => z['$'].id === zone.toString(),
-    )!;
-
-    return zone_obj['name'][0];
   }
 
   // TODO: DELETE ME
@@ -532,7 +514,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     [htsp, clsp] = processSetpointDeadband(
       htsp || parseFloat(manual_activity_obj['htsp'][0]),
       clsp || parseFloat(manual_activity_obj['clsp'][0]),
-      await this.getUnits(),
+      await firstValueFrom(this.temp_units),
       // when setpoints are too close, make clsp sticky when no change made to htsp
       htsp === null,
     );

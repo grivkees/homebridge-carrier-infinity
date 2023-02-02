@@ -82,6 +82,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       // Add system+zone based accessories
       const zones = await firstValueFrom(system.profile.zone_ids);
       for (const zone of zones) {  // 'of' makes sure we go through zone ids, not index
+        const zone_name = await firstValueFrom(system.config.getZone(zone).name);
         const context_zone = {...context_system, zone: zone};
         system.log.debug(`Discovered zone ${context_zone.zone}`);
         // -> Zone Accessory: Thermostat
@@ -89,7 +90,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
           this,
           {
             ...context_zone,
-            name: `${await system.config.getZoneName(zone)} Thermostat`,
+            name: `${zone_name} Thermostat`,
             holdBehavior: this.config['holdBehavior'],
             holdArgument: this.config['holdArgument'],
           },
@@ -100,7 +101,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
             this,
             {
               ...context_zone,
-              name: `${await system.config.getZoneName(zone)} Environmental Sensor`,
+              name: `${zone_name} Environmental Sensor`,
             },
           );
         }
@@ -110,7 +111,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
             this,
             {
               ...context_zone,
-              name: `${await system.config.getZoneName(zone)} Comfort Activity`,
+              name: `${zone_name} Comfort Activity`,
               holdBehavior: this.config['holdBehavior'],
               holdArgument: this.config['holdArgument'],
             },
