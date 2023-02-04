@@ -15,23 +15,31 @@ import Status, {Zone as SZone} from './interface_status';
 import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
 import {
   combineLatest,
+  debounceTime,
   distinctUntilChanged,
+  filter,
   firstValueFrom,
   fromEvent,
   interval,
+  lastValueFrom,
   map,
   merge,
   Observable,
   of,
   ReplaySubject,
+  Subscription,
   switchMap,
+  take,
+  takeUntil,
   throttleTime,
+  timeout,
 } from 'rxjs';
 import EventEmitter from 'events';
 
 // TODO: change public to read only
 // TODO: make F to C rounding consistent for value deduping
 // TODO: add backoff on api errors
+// TODO: make getPath a var not method
 
 export type TempWithUnit = [number, string];
 
@@ -132,7 +140,7 @@ export class LocationsModel extends BaseModel<Location> {
 }
 
 abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
-  private last_updated = 0;  // TODO use this
+  protected last_fetched_ts = 0;  // TODO use this
   protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime']);
 
   constructor(
@@ -147,8 +155,8 @@ abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
     const data_object = await super.forceFetch();
     const top_level_key = Object.keys(data_object)[0];
     const ts = data_object[top_level_key].timestamp[0];
-    this.last_updated = Date.parse(ts);
-    this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_updated})`);
+    this.last_fetched_ts = Date.parse(ts);
+    this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_fetched_ts})`);
     return data_object;
   }
 }
@@ -269,6 +277,44 @@ export class SystemStatusZoneModel {
 }
 
 export class SystemConfigModel extends BaseSystemModel<Config> {
+  // This will always hold the 'clean' version of the config, that is not subject
+  // to being changed by set methods.
+  private clean_data$: ReplaySubject<Config>;
+  private latest_clean_data_hash: string | undefined = undefined;
+  // dirty indicates the local data$ has been modified
+  protected dirty = false;
+  private last_pushed_ts = 0;
+  private latest_clean: Config | undefined = undefined; // TODO DELTE
+
+  constructor(
+    protected readonly infinity_client: InfinityRestClient,
+    public readonly serialNumber: string,
+    protected readonly log: Logger,
+  ) {
+    super(infinity_client, serialNumber, log);
+
+    // Set aside a 'clean' Subject
+    this.clean_data$ = this.data$;
+    this.clean_data$.subscribe(data => {
+      this.latest_clean_data_hash = this.hash(data);
+    });
+
+    // Make new 'dirty'-able Subject, this will track the api and accept changes ...
+    this.data$ = new ReplaySubject<Config>(1);
+    this.clean_data$.pipe(
+      // ... but it only tracks the api when the local data is 'clean'.
+      filter((data) => Date.parse(data.config.timestamp[0]) >= this.last_pushed_ts),
+    ).subscribe(this.data$);
+
+    // Send changes to $data back to the carrier api ...
+    this.data$.pipe(
+      // ... but only when we know the local data is 'dirty' aka modified by HK.
+      filter(() => this.last_pushed_ts > this.last_fetched_ts),
+      // Wait x seconds after last change before sending.
+      debounceTime(3 * 1000),
+    ).subscribe(async data => this.push(data));
+  }
+
   getPath(): string {
     return `/systems/${this.serialNumber}/config`;
   }
@@ -350,96 +396,104 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
 
   /* Write APIs */
-  mutations: (() => Promise<void>)[] = [];
+  // mutations: (() => Promise<void>)[] = [];
 
-  private async push(): Promise<void> {
-    // Wait a bit so we can catch other mutations that came in around the
-    // same time.
-    await new Promise(r => setTimeout(r, 2000));
-    // We only ever need 2 pushes ongoing at a time. One active, and one pending.
-    // The first one will handle mutations available at its start, and the next
-    // one will cover mutations that arrived during the previous's run.
-    // First, to make sure we only ever have one 'pending' push, cancel any other
-    // possible 'pending' pushes, and make this one become the 'pending' push.
-    this.write_lock.cancel();
-    // Then, grab the lock. so this push can move from 'pending' to 'active'.
-    try {
-      await this.write_lock.runExclusive(async () => {
-      // 1. Do mutations
-        const mutated_hash = await this.mutate();
-        if (mutated_hash === null) {
-          return;
-        }
-        // 2. Push
-        await this.forcePush();
-        this.log.info('... pushing changes complete.');
-        // 3. Confirm
-        await new Promise(r => setTimeout(r, 5000));
-        await this.forceFetch();
-        if (mutated_hash === this.hash(await firstValueFrom(this.data$))) {
-          this.log.debug('Successful propagation to carrier api is confirmed.');
-        } else {
-          this.log.warn('Changes do not (yet?) appear to have propagated to the carrier api.');
-        }
-      });
-    } catch (e) {
-      if (e === E_CANCELED) {
-        return;
-      } else if (e === E_TIMEOUT || e === E_ALREADY_LOCKED) {
-        this.log.error(`Deadlock on push ${e}. Report bug: https://bit.ly/3igbU7D`);
-      } else {
-        this.log.error(
-          'Failed to push updates: ',
-          Axios.isAxiosError(e) ? e.message : e,
-        );
-      }
-    }
-  }
+  // private async push(): Promise<void> {
+  //   // Wait a bit so we can catch other mutations that came in around the
+  //   // same time.
+  //   await new Promise(r => setTimeout(r, 2000));
+  //   // We only ever need 2 pushes ongoing at a time. One active, and one pending.
+  //   // The first one will handle mutations available at its start, and the next
+  //   // one will cover mutations that arrived during the previous's run.
+  //   // First, to make sure we only ever have one 'pending' push, cancel any other
+  //   // possible 'pending' pushes, and make this one become the 'pending' push.
+  //   this.write_lock.cancel();
+  //   // Then, grab the lock. so this push can move from 'pending' to 'active'.
+  //   try {
+  //     await this.write_lock.runExclusive(async () => {
+  //     // 1. Do mutations
+  //       const mutated_hash = await this.mutate();
+  //       if (mutated_hash === null) {
+  //         return;
+  //       }
+  //       // 2. Push
+  //       await this.forcePush();
+  //       this.log.info('... pushing changes complete.');
+  //       // 3. Confirm
+  //       await new Promise(r => setTimeout(r, 5000));
+  //       await this.forceFetch();
+  //       if (mutated_hash === this.hash(await firstValueFrom(this.data$))) {
+  //         this.log.debug('Successful propagation to carrier api is confirmed.');
+  //       } else {
+  //         this.log.warn('Changes do not (yet?) appear to have propagated to the carrier api.');
+  //       }
+  //     });
+  //   } catch (e) {
+  //     if (e === E_CANCELED) {
+  //       return;
+  //     } else if (e === E_TIMEOUT || e === E_ALREADY_LOCKED) {
+  //       this.log.error(`Deadlock on push ${e}. Report bug: https://bit.ly/3igbU7D`);
+  //     } else {
+  //       this.log.error(
+  //         'Failed to push updates: ',
+  //         Axios.isAxiosError(e) ? e.message : e,
+  //       );
+  //     }
+  //   }
+  // }
 
-  private async mutate(): Promise<string | null> {
-    const data = await firstValueFrom(this.data$);
-
-    // TODO most of this hash checking is no longer valid
-    // short circuit if no mutations in queue
-    if (this.mutations.length === 0) {
-      return null;
-    }
-
-    // Refresh config.
-    const old_hash = this.hash(data);
-    await this.forceFetch();
-    if (old_hash !== this.hash(data)) {
-      this.log.warn('Cached config was stale before mutation and push.');
-    }
-
-    // Take config mutations of the queue and run them.
-    // TODO make mutations non-async. these need to happen in order. and async
-    // in a loop is an anti-pattern.
-    while(this.mutations.length > 0) {
-      const m = this.mutations.shift();
-      if (m) {
-        await m();
-      }
-    }
-    const mutated_hash = this.hash(data);
-
+  private async push(data: Config): Promise<void> {
     // If nothing actually changed, no need to push.
-    if (old_hash === mutated_hash) {
+    const dirty_hash = this.hash(data);
+    if (this.latest_clean_data_hash === dirty_hash) {
       this.log.warn('Config doesn\'t appear to have changed. No changes sent.');
-      return null;
+      return;
     }
 
-    return mutated_hash;
+    // Make sure the base config revision is not outdated
+    const new_clean_data = await this.forceFetch();
+    if (this.latest_clean_data_hash !== this.hash(new_clean_data)) {
+      this.log.error('Aborting Push: API shows a newer, modified config.');
+      this.last_pushed_ts = 0;  // revert to clean config
+      this.clean_data$.next(new_clean_data); // share new config
+      return;
+    }
+
+    // Send the update
+    this.last_pushed_ts = Date.now();
+    await this.forcePush(data);
+
+    // Wait for a bit, and confirm if we see the api update on the server
+    this.clean_data$.pipe(
+      // Check for the next x seconds
+      timeout(10 * 1000),
+      // Stop looking when we see the first successful update appear
+      filter(data => dirty_hash === this.hash(data)),
+      take(1),
+    ).subscribe({
+      next: () => {
+        this.log.info('Successful propagation to carrier api is confirmed.');
+      },
+      // As a fail-safe, revert to clean config if update failed
+      error: () => {
+        this.log.error('Changes do not (yet?) appear to have propagated to the carrier api.');
+        this.last_pushed_ts = 0; // revert to clean config
+        this.events.emit('onGet'); // TODO: pick different event
+      },
+    });
+
+    // Schedule an update to jump start the verification above
+    this.events.emit('onGet');  // TODO: pick different event
   }
 
-  private async forcePush(): Promise<void> {
+  private async forcePush(data: Config): Promise<void> {
     this.log.info('Pushing changes to carrier api...');
     const builder = new xml2js.Builder();
-    const new_xml = builder.buildObject(await firstValueFrom(this.data$));
-    const data = `data=${encodeURIComponent(new_xml)}`;
+    const new_xml = builder.buildObject(data);
+    const post_data = `data=${encodeURIComponent(new_xml)}`;
     await this.infinity_client.axios.post(
       this.getPath(),
-      data,
+      post_data,
       {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -449,101 +503,96 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   }
 
   async setMode(mode: string): Promise<void> {
-    this.mutations.push(async () => {
-      this.mutateMode(mode);
-    });
-    // Schedule the push event, but don't wait for it to return.
-    this.push();
-  }
-
-  private mutateMode(mode: string): void {
     this.log.debug('Setting mode to ' + mode);
-    // this.data$.value.config.mode[0] = mode; // TODO fix
+    const data = await firstValueFrom(this.data$);
+    data.config.mode[0] = mode;
+    this.last_pushed_ts = Date.now() + 10 * 1000;  // set to future to stop fetch
+    this.data$.next(data);
   }
 
-  async setZoneActivityHold(
-    zone: string,
-    activity: string,
-    hold_until: string | null,
-  ): Promise<void> {
-    this.mutations.push(async () => {
-      await this.mutateZoneActivityHold(zone, activity, hold_until);
-    });
-    // Schedule the push event, but don't wait for it to return.
-    this.push();
-  }
+  // async setZoneActivityHold(
+  //   zone: string,
+  //   activity: string,
+  //   hold_until: string | null,
+  // ): Promise<void> {
+  //   this.mutations.push(async () => {
+  //     await this.mutateZoneActivityHold(zone, activity, hold_until);
+  //   });
+  //   // Schedule the push event, but don't wait for it to return.
+  //   this.push();
+  // }
 
-  private async mutateZoneActivityHold(
-    zone: string,
-    activity: string,
-    hold_until: string | null,
-  ): Promise<void> {
-    this.log.debug(`Setting zone ${zone} activity to ${activity} until ${hold_until}`);
-    const zone_obj = await this.getZone(zone);
-    zone_obj['holdActivity']![0] = activity;
-    zone_obj['hold'][0] = activity ? STATUS.ON : STATUS.OFF;
-    zone_obj['otmr'][0] = activity ? hold_until || '' : '';
-  }
+  // private async mutateZoneActivityHold(
+  //   zone: string,
+  //   activity: string,
+  //   hold_until: string | null,
+  // ): Promise<void> {
+  //   this.log.debug(`Setting zone ${zone} activity to ${activity} until ${hold_until}`);
+  //   const zone_obj = await this.getZone(zone);
+  //   zone_obj['holdActivity']![0] = activity;
+  //   zone_obj['hold'][0] = activity ? STATUS.ON : STATUS.OFF;
+  //   zone_obj['otmr'][0] = activity ? hold_until || '' : '';
+  // }
 
-  async setZoneActivityManualHold(
-    zone: string,
-    clsp: number | null,
-    htsp: number | null,
-    hold_until: string | null,
-    fan: string | null = null,
-  ): Promise<void> {
-    // Modify MANUAL activity to the requested setpoints
-    this.mutations.push(async () => {
-      await this.mutateZoneActivityManualHold(zone, clsp, htsp, fan);
-    });
-    // Set hold to MANUAL activity
-    this.mutations.push(async () => {
-      await this.mutateZoneActivityHold(zone, ACTIVITY.MANUAL, hold_until);
-    });
-    // Schedule the push event, but don't wait for it to return.
-    this.push();
-  }
+  // async setZoneActivityManualHold(
+  //   zone: string,
+  //   clsp: number | null,
+  //   htsp: number | null,
+  //   hold_until: string | null,
+  //   fan: string | null = null,
+  // ): Promise<void> {
+  //   // Modify MANUAL activity to the requested setpoints
+  //   this.mutations.push(async () => {
+  //     await this.mutateZoneActivityManualHold(zone, clsp, htsp, fan);
+  //   });
+  //   // Set hold to MANUAL activity
+  //   this.mutations.push(async () => {
+  //     await this.mutateZoneActivityHold(zone, ACTIVITY.MANUAL, hold_until);
+  //   });
+  //   // Schedule the push event, but don't wait for it to return.
+  //   this.push();
+  // }
 
-  private async mutateZoneActivityManualHold(
-    zone: string,
-    clsp: number | null,
-    htsp: number | null,
-    fan: string | null = null,
-  ): Promise<void> {
-    this.log.debug(
-      `Setting zone ${zone} to`,
-      clsp ? `clsp=${clsp}` : '',
-      htsp ? `htsp=${htsp}` : '',
-      fan ? `fan=${fan}` : '',
-      '.',
-    );
-    const zone_obj = await this.getZone(zone);
-    // When moving to manual activity, default to prev activity settings.
-    const manual_activity_obj = await this.getZoneActivityConfig(zone, ACTIVITY.MANUAL);
-    if (zone_obj['holdActivity']![0] !== ACTIVITY.MANUAL) {
-      const prev_activity_obj = await this.getZoneActivityConfig(
-        zone,
-        await this.getZoneActivity(zone),
-      );
-      manual_activity_obj['clsp'][0] = prev_activity_obj['clsp'][0];
-      manual_activity_obj['htsp'][0] = prev_activity_obj['htsp'][0];
-      manual_activity_obj['fan'][0] = prev_activity_obj['fan'][0];
-    }
-    // Set setpoints on manual activity
-    [htsp, clsp] = processSetpointDeadband(
-      htsp || parseFloat(manual_activity_obj['htsp'][0]),
-      clsp || parseFloat(manual_activity_obj['clsp'][0]),
-      await firstValueFrom(this.temp_units),
-      // when setpoints are too close, make clsp sticky when no change made to htsp
-      htsp === null,
-    );
-    manual_activity_obj['htsp'][0] = htsp.toFixed(1);
-    manual_activity_obj['clsp'][0] = clsp.toFixed(1);
-    // Set fan on manual activity
-    if (fan) {
-      manual_activity_obj['fan'][0] = fan;
-    }
-  }
+  // private async mutateZoneActivityManualHold(
+  //   zone: string,
+  //   clsp: number | null,
+  //   htsp: number | null,
+  //   fan: string | null = null,
+  // ): Promise<void> {
+  //   this.log.debug(
+  //     `Setting zone ${zone} to`,
+  //     clsp ? `clsp=${clsp}` : '',
+  //     htsp ? `htsp=${htsp}` : '',
+  //     fan ? `fan=${fan}` : '',
+  //     '.',
+  //   );
+  //   const zone_obj = await this.getZone(zone);
+  //   // When moving to manual activity, default to prev activity settings.
+  //   const manual_activity_obj = await this.getZoneActivityConfig(zone, ACTIVITY.MANUAL);
+  //   if (zone_obj['holdActivity']![0] !== ACTIVITY.MANUAL) {
+  //     const prev_activity_obj = await this.getZoneActivityConfig(
+  //       zone,
+  //       await this.getZoneActivity(zone),
+  //     );
+  //     manual_activity_obj['clsp'][0] = prev_activity_obj['clsp'][0];
+  //     manual_activity_obj['htsp'][0] = prev_activity_obj['htsp'][0];
+  //     manual_activity_obj['fan'][0] = prev_activity_obj['fan'][0];
+  //   }
+  //   // Set setpoints on manual activity
+  //   [htsp, clsp] = processSetpointDeadband(
+  //     htsp || parseFloat(manual_activity_obj['htsp'][0]),
+  //     clsp || parseFloat(manual_activity_obj['clsp'][0]),
+  //     await firstValueFrom(this.temp_units),
+  //     // when setpoints are too close, make clsp sticky when no change made to htsp
+  //     htsp === null,
+  //   );
+  //   manual_activity_obj['htsp'][0] = htsp.toFixed(1);
+  //   manual_activity_obj['clsp'][0] = clsp.toFixed(1);
+  //   // Set fan on manual activity
+  //   if (fan) {
+  //     manual_activity_obj['fan'][0] = fan;
+  //   }
+  // }
 }
 
 export class SystemConfigZoneModel {

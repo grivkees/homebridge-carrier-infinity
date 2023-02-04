@@ -2,7 +2,7 @@ import { CharacteristicValue } from 'homebridge';
 import { ThermostatCharacteristicWrapper, MultiWrapper } from './characteristics_base';
 import { convertCharTemp2SystemTemp, convertSystemTemp2CharTemp } from './helpers';
 import { FAN_MODE, SYSTEM_MODE } from './api/constants';
-import { combineLatest, map } from 'rxjs';
+import { combineLatest, firstValueFrom, map } from 'rxjs';
 
 class CurrentACStatus extends ThermostatCharacteristicWrapper {
   ctype = this.Characteristic.CurrentHeatingCoolingState;
@@ -41,28 +41,28 @@ class TargetACState extends ThermostatCharacteristicWrapper {
     }
   }));
 
-  // set = async (value: CharacteristicValue) => {
-  //   switch(value) {
-  //     case this.Characteristic.TargetHeatingCoolingState.OFF: {
-  //       // If manual fan is set, go to fan only mode
-  //       if (await this.system.config.getZoneActivityFan(this.context.zone, await this.getActivity()) !== FAN_MODE.OFF) {
-  //         return await this.system.config.setMode(SYSTEM_MODE.FAN_ONLY);
-  //       // If no manual fan, go to full off
-  //       } else {
-  //         return await this.system.config.setMode(SYSTEM_MODE.OFF);
-  //       }
-  //     }
-  //     case this.Characteristic.TargetHeatingCoolingState.COOL:
-  //       return await this.system.config.setMode(SYSTEM_MODE.COOL);
-  //     case this.Characteristic.TargetHeatingCoolingState.HEAT:
-  //       return await this.system.config.setMode(SYSTEM_MODE.HEAT);
-  //     case this.Characteristic.TargetHeatingCoolingState.AUTO:
-  //       return await this.system.config.setMode(SYSTEM_MODE.AUTO);
-  //     default:
-  //       this.log.error(`Don't know how to set target state '${value}'. Report bug: https://bit.ly/3igbU7D`);
-  //       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
-  //   }
-  // };
+  set = async (value: CharacteristicValue) => {
+    switch(value) {
+      case this.Characteristic.TargetHeatingCoolingState.OFF: {
+        // If manual fan is set, go to fan only mode
+        if (await firstValueFrom(this.system.config.getZone(this.context.zone).fan) !== FAN_MODE.OFF) {
+          return await this.system.config.setMode(SYSTEM_MODE.FAN_ONLY);
+        // If no manual fan, go to full off
+        } else {
+          return await this.system.config.setMode(SYSTEM_MODE.OFF);
+        }
+      }
+      case this.Characteristic.TargetHeatingCoolingState.COOL:
+        return await this.system.config.setMode(SYSTEM_MODE.COOL);
+      case this.Characteristic.TargetHeatingCoolingState.HEAT:
+        return await this.system.config.setMode(SYSTEM_MODE.HEAT);
+      case this.Characteristic.TargetHeatingCoolingState.AUTO:
+        return await this.system.config.setMode(SYSTEM_MODE.AUTO);
+      default:
+        this.log.error(`Don't know how to set target state '${value}'. Report bug: https://bit.ly/3igbU7D`);
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
+    }
+  };
 }
 
 class DisplayUnits extends ThermostatCharacteristicWrapper {
