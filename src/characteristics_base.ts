@@ -6,7 +6,7 @@ import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { PrefixLogger } from './helper_logging';
 
-import { map, Observable, of } from 'rxjs';
+import { firstValueFrom, map, Observable, of } from 'rxjs';
 /*
 * Helpers to add handlers to the HAP Service and Characteristic objects.
 */
@@ -44,10 +44,8 @@ export abstract class MultiWrapper extends Wrapper {
 export abstract class CharacteristicWrapper extends Wrapper {
   public abstract ctype: WithUUID<new () => Characteristic>;
   protected set: ((value: CharacteristicValue) => Promise<void>) | undefined;
-  // used exclusively if no char value is set yet (first accessory load)
-  protected default_value: CharacteristicValue | null = null;
   // Holds an observable of the system/api-based value
-  protected value?: Observable<CharacteristicValue>;
+  protected abstract value: Observable<CharacteristicValue>;
   protected props?: Observable<object>;
 
   wrap(service: Service): void {
@@ -58,22 +56,23 @@ export abstract class CharacteristicWrapper extends Wrapper {
       });
     }
     // Push updates from the system-based value observable to HK
-    if (this.value) {
-      this.value.subscribe(
-        async data => {
-          this.log.warn(`Updating ${this.ctype.name} to ${data}`); // TODO REMOVE
-          characteristic.updateValue(data);
-        },
-      );
-    }
+    this.value.subscribe(
+      async data => {
+        this.log.warn(`Updating ${this.ctype.name} to ${data}`); // TODO REMOVE
+        characteristic.updateValue(data);
+      },
+    );
     // Make HK get requests initiate an observable update
     characteristic.onGet(async () => {
       // Tell the system model it should update ...
       this.system.status.events.emit('onGet');
       this.system.config.events.emit('onGet');
-      // ... and return immediately
-      // try 1) existing value, if falsy, 2) default value, if null, 3) keep existing value
-      return characteristic.value || this.default_value || characteristic.value;
+      // ... and return immediately the last seen api value.
+      const data = await firstValueFrom(this.value);
+      if (characteristic.value !== data) {
+        this.log.warn(`Updating on GET ${this.ctype.name} to ${data}`); // TODO REMOVE
+      }
+      return data;
     });
     // Sets call set helper which calls system model
     if (this.set) {

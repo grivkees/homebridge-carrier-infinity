@@ -106,7 +106,6 @@ class CoolSetpoint extends ThermostatCharacteristicWrapper {
 
 class HeatSetpoint extends ThermostatCharacteristicWrapper {
   ctype = this.Characteristic.HeatingThresholdTemperature;
-  default_value = 10;
   props = this.system.config.temp_bounds.pipe(map(data => {
     return {
       minValue: Number(convertSystemTemp2CharTemp(data[0][0], data[0][1])),

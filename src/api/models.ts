@@ -17,7 +17,6 @@ import {
   combineLatest,
   distinctUntilChanged,
   firstValueFrom,
-  from,
   fromEvent,
   interval,
   map,
@@ -31,6 +30,8 @@ import {
 import EventEmitter from 'events';
 
 // TODO: change public to read only
+// TODO: make F to C rounding consistent for value deduping
+// TODO: add backoff on api errors
 
 export type TempWithUnit = [number, string];
 
@@ -60,7 +61,7 @@ abstract class BaseModel<T extends object> {
     // Use these 'ticks' triggers to update the data.
     ticks.pipe(
       switchMap(
-        () => from(this.forceFetch()),
+        () => this.fetchObservable(),
       ),
       distinctUntilChanged((prev, cur) => this.isUnchanged(prev, cur)),
     // Send data to the BehaviorSubject/Observable.
@@ -80,6 +81,24 @@ abstract class BaseModel<T extends object> {
         return this.HASH_IGNORE_KEYS.has(key);
       }},
     );
+  }
+
+  protected fetchObservable(): Observable<T> {
+    return new Observable((observer) => {
+      this.forceFetch()
+        .then((data) => {
+          observer.next(data);
+          observer.complete();
+        })
+        // An observable can never return an error, or it completes.
+        // Log errors, swallow them, and send no new value.
+        .catch((error) => {
+          this.log.error(
+            'Failed to fetch updates: ', Axios.isAxiosError(error) ? error.message : error,
+          );
+          observer.complete();
+        });
+    });
   }
 
   protected async forceFetch(): Promise<T> {

@@ -5,13 +5,13 @@ class CurrentRH extends CharacteristicWrapper {
   value = this.system.status.getZone(this.context.zone).humidity;
 }
 
-class TargetDehumidify extends CharacteristicWrapper {
-  ctype = this.Characteristic.RelativeHumidityDehumidifierThreshold;
-}
+// class TargetDehumidify extends CharacteristicWrapper {
+//   ctype = this.Characteristic.RelativeHumidityDehumidifierThreshold;
+// }
 
-class TargetHumidify extends CharacteristicWrapper {
-  ctype = this.Characteristic.RelativeHumidityHumidifierThreshold;
-}
+// class TargetHumidify extends CharacteristicWrapper {
+//   ctype = this.Characteristic.RelativeHumidityHumidifierThreshold;
+// }
 
 
 export class ThermostatRHService extends MultiWrapper {
@@ -23,7 +23,7 @@ export class ThermostatRHService extends MultiWrapper {
 export class HumidifierService extends MultiWrapper {
   WRAPPERS = [
     CurrentRH,
-    TargetDehumidify,
-    TargetHumidify,
+    // TargetDehumidify,
+    // TargetHumidify,
   ];
 }
