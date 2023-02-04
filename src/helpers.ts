@@ -3,7 +3,7 @@ import { FAN_MODE } from './api/constants';
 
 export function convertSystemTemp2CharTemp(temp: number, units: string): CharacteristicValue {
   if (units === 'F') {
-    return 5.0 / 9.0 * (temp - 32);
+    return Math.round(5.0 / 9.0 * (temp - 32) * 10) / 10;
   } else {
     return temp;
   }
@@ -11,19 +11,20 @@ export function convertSystemTemp2CharTemp(temp: number, units: string): Charact
 
 export function convertCharTemp2SystemTemp(temp: CharacteristicValue, units: string): number {
   temp = Number(temp);
+  // HK keeps track in C, but carrier can be either C or F. Convert if needed.
   if (units === 'F') {
-    // HK keeps track in C, but infinity can be either C or F. Convert to F if
-    // needed, then round to degree for infinity.
-    return Math.round((9.0 / 5.0 * temp) + 32);
+    // Round to integer degree for carrier.
+    const rounded = Math.round((9.0 / 5.0 * temp) + 32);
+    return Math.abs(rounded) < Number.EPSILON ? 0 : rounded; // get rid of -0
   } else {
-    // Round C to half degree for infinity.
+    // Round C to half degree for carrier.
     return Math.round(temp * 2) / 2;
   }
 }
 
 export function areCharTempsClose(t1: CharacteristicValue | null, t2: CharacteristicValue | null): boolean {
   if (t1 && t2) {
-    return Math.abs( Number(t1) - Number(t2) ) < .1;
+    return Math.abs( Number(t1) - Number(t2) ) < Number.EPSILON;
   } else {
     return false;
   }
@@ -70,4 +71,8 @@ export function processSetpointDeadband(
     }
   }
   return [htsp, clsp];
+}
+
+export function range(start: number, end: number): number[] {
+  return Array.from({length: (end - start) + 1}, (_, i) => start + i);
 }
