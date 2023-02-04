@@ -97,27 +97,27 @@ export abstract class ThermostatCharacteristicWrapper extends CharacteristicWrap
   //   return await this.system.config.getZoneActivity(this.context.zone);
   // }
 
-  // async getHoldTime(): Promise<string> {
-  //   // OTMR setting to say when manual hold should end
-  //   switch (this.context.holdBehavior) {
-  //     case 'activity':
-  //       return await this.system.config.getZoneNextActivityTime(this.context.zone);
-  //     case 'for_x': {
-  //       const arg = this.context.holdArgument.split(':');
-  //       let target_ms = (new Date()).getTime();
-  //       target_ms += Number(arg[0]) * 60 * 60 * 1000;
-  //       target_ms += Number(arg[1]) * 60 * 1000;
-  //       const target_date = new Date(target_ms);
-  //       return `${target_date.getHours()}:${target_date.getMinutes()}`.padStart(5, '0');
-  //     }
-  //     case 'until_x':
-  //       return this.context.holdArgument;
-  //     case 'forever':
-  //       return '';
-  //     default:
-  //       return '';
-  //   }
-  // }
+  async getHoldTime(): Promise<string> {
+    // OTMR setting to say when manual hold should end
+    switch (this.context.holdBehavior) {
+      case 'activity':
+        return firstValueFrom(this.system.config.getZone(this.context.zone).next_activity_time);
+      case 'for_x': {
+        const arg = this.context.holdArgument.split(':');
+        let target_ms = (new Date()).getTime();
+        target_ms += Number(arg[0]) * 60 * 60 * 1000;
+        target_ms += Number(arg[1]) * 60 * 1000;
+        const target_date = new Date(target_ms);
+        return `${target_date.getHours()}:${target_date.getMinutes()}`.padStart(5, '0');
+      }
+      case 'until_x':
+        return this.context.holdArgument;
+      case 'forever':
+        return '';
+      default:
+        return '';
+    }
+  }
 }
 
 class AccessorySerial extends CharacteristicWrapper {

@@ -514,29 +514,26 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     this.data$.next(data);
   }
 
-  // async setZoneActivityHold(
-  //   zone: string,
-  //   activity: string,
-  //   hold_until: string | null,
-  // ): Promise<void> {
-  //   this.mutations.push(async () => {
-  //     await this.mutateZoneActivityHold(zone, activity, hold_until);
-  //   });
-  //   // Schedule the push event, but don't wait for it to return.
-  //   this.push();
-  // }
+  async setZoneActivityHold(
+    zone: string,
+    activity: string,
+    hold_until: string | null,
+  ): Promise<void> {
+    this.log.debug(`Setting zone ${zone} activity to ${activity} until ${hold_until}`);
 
-  // private async mutateZoneActivityHold(
-  //   zone: string,
-  //   activity: string,
-  //   hold_until: string | null,
-  // ): Promise<void> {
-  //   this.log.debug(`Setting zone ${zone} activity to ${activity} until ${hold_until}`);
-  //   const zone_obj = await this.getZone(zone);
-  //   zone_obj['holdActivity']![0] = activity;
-  //   zone_obj['hold'][0] = activity ? STATUS.ON : STATUS.OFF;
-  //   zone_obj['otmr'][0] = activity ? hold_until || '' : '';
-  // }
+    // Get data from zone object and make changes
+    const data = await firstValueFrom(this.data$);
+    const zone_obj = data.config.zones[0].zone.find(
+      (z) => z['$'].id === zone.toString(),
+    )!;
+    zone_obj['holdActivity']![0] = activity;
+    zone_obj['hold'][0] = activity ? STATUS.ON : STATUS.OFF;
+    zone_obj['otmr'][0] = activity ? hold_until || '' : '';
+
+    // Push changes
+    this.last_pushed_ts = Date.now() + 10 * 1000;  // set to future to stop fetch
+    this.data$.next(data);
+  }
 
   // async setZoneActivityManualHold(
   //   zone: string,
