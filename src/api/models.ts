@@ -251,6 +251,7 @@ export class SystemStatusZoneModel {
   public activity = this.zone.pipe(map(zone => zone.currentActivity[0]), distinctUntilChanged());
   // The zone is blowing if the mode is on or the fan is on
   public blowing = combineLatest([this.mode, this.fan]).pipe(
+    debounceTime(50),
     map(([mode, fan]) => mode !== SYSTEM_MODE.OFF || fan !== FAN_MODE.OFF),
     distinctUntilChanged(),
   );
@@ -259,16 +260,19 @@ export class SystemStatusZoneModel {
   public closed = this.zone.pipe(map(zone => zone.damperposition[0] === '0'), distinctUntilChanged());
 
   public temp = combineLatest([this.zone, this.temp_units$]).pipe(
+    debounceTime(50),
     map(([zone, temp_units]) => [Number(zone.rt[0]), temp_units] as TempWithUnit),
     distinctUntilChanged(),
   );
 
   public cool_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(
+    debounceTime(50),
     map(([zone, temp_units]) => [Number(zone.clsp[0]), temp_units] as TempWithUnit),
     distinctUntilChanged(),
   );
 
   public heat_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(
+    debounceTime(50),
     map(([zone, temp_units]) => [Number(zone.htsp[0]), temp_units] as TempWithUnit),
     distinctUntilChanged(),
   );
@@ -655,22 +659,28 @@ export class SystemConfigZoneModel {
   private current_activity_config$ = combineLatest([
     this.zone,
     this.activity],
-  ).pipe(map(
-    ([zone, activity_name]) => {
-      return zone.activities[0].activity.find(
-        (a) => a['$'].id === activity_name,
-      )!;
-    },
-  ), distinctUntilChanged());
+  ).pipe(
+    debounceTime(50),
+    map(
+      ([zone, activity_name]) => {
+        return zone.activities[0].activity.find(
+          (a) => a['$'].id === activity_name,
+        )!;
+      },
+    ),
+    distinctUntilChanged(),
+  );
 
   public fan = this.current_activity_config$.pipe(map(activity => activity.fan[0]), distinctUntilChanged());
 
   public cool_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(
+    debounceTime(50),
     map(([activity, temp_units]) => [Number(activity.clsp[0]), temp_units] as TempWithUnit),
     distinctUntilChanged(),
   );
 
   public heat_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(
+    debounceTime(50),
     map(([activity, temp_units]) => [Number(activity.htsp[0]), temp_units] as TempWithUnit),
     distinctUntilChanged(),
   );
@@ -710,6 +720,7 @@ export class SystemModel {
       this.status.getZone(zone).activity,
       this.config.getZone(zone).activity,
     ]).pipe(
+      debounceTime(50),
       map(([s_activity, c_activity]) => {
         // Vacation scheduling is weird, and changes infrequently. Just get it from status.
         if (s_activity === ACTIVITY.VACATION) {

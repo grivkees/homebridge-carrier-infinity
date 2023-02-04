@@ -2,7 +2,7 @@ import { CharacteristicValue } from 'homebridge';
 import { ThermostatCharacteristicWrapper, MultiWrapper } from './characteristics_base';
 import { convertCharTemp2SystemTemp, convertSystemTemp2CharTemp } from './helpers';
 import { FAN_MODE, SYSTEM_MODE } from './api/constants';
-import { combineLatest, firstValueFrom, map } from 'rxjs';
+import { combineLatest, debounceTime, distinctUntilChanged, firstValueFrom, map } from 'rxjs';
 
 class CurrentACStatus extends ThermostatCharacteristicWrapper {
   ctype = this.Characteristic.CurrentHeatingCoolingState;
@@ -145,19 +145,25 @@ class GeneralSetpoint extends ThermostatCharacteristicWrapper {
     this.system.config.mode,
     this.system.config.getZone(this.context.zone).cool_setpoint,
     this.system.config.getZone(this.context.zone).heat_setpoint,
-  ]).pipe(map(([c_mode, c_cool_setpoint, c_heat_setpoint]) => {
-    switch (c_mode) {
-      case SYSTEM_MODE.COOL:
-        return convertSystemTemp2CharTemp(c_cool_setpoint[0], c_cool_setpoint[1]);
-      case SYSTEM_MODE.HEAT:
-        return convertSystemTemp2CharTemp(c_heat_setpoint[0], c_heat_setpoint[1]);
-      default:
-        return convertSystemTemp2CharTemp(
-          (c_cool_setpoint[0] + c_heat_setpoint[0]) / 2,
-          c_cool_setpoint[1],
-        );
-    }
-  }));
+  ]).pipe(
+    debounceTime(50),
+    map(
+      ([c_mode, c_cool_setpoint, c_heat_setpoint]) => {
+        switch (c_mode) {
+          case SYSTEM_MODE.COOL:
+            return convertSystemTemp2CharTemp(c_cool_setpoint[0], c_cool_setpoint[1]);
+          case SYSTEM_MODE.HEAT:
+            return convertSystemTemp2CharTemp(c_heat_setpoint[0], c_heat_setpoint[1]);
+          default:
+            return convertSystemTemp2CharTemp(
+              (c_cool_setpoint[0] + c_heat_setpoint[0]) / 2,
+              c_cool_setpoint[1],
+            );
+        }
+      },
+    ),
+    distinctUntilChanged(),
+  );
 
   // set = async (value: CharacteristicValue) => {
   //   const svalue = convertCharTemp2SystemTemp(value, await this.system.config.getUnits());

@@ -58,7 +58,11 @@ export abstract class CharacteristicWrapper extends Wrapper {
     // Push updates from the system-based value observable to HK
     this.value.subscribe(
       async data => {
-        this.log.warn(`Updating ${this.ctype.name} to ${data}`); // TODO REMOVE
+        if (characteristic.value == data) {
+          this.log.warn(`BADPUSH Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
+        } else {
+          this.log.warn(`PUSH Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
+        }
         characteristic.updateValue(data);
       },
     );
@@ -69,8 +73,8 @@ export abstract class CharacteristicWrapper extends Wrapper {
       this.system.config.events.emit('onGet');
       // ... and return immediately the last seen api value.
       const data = await firstValueFrom(this.value);
-      if (characteristic.value !== data) {
-        this.log.warn(`Updating on GET ${this.ctype.name} to ${data}`); // TODO REMOVE
+      if (characteristic.value != data) {
+        this.log.warn(`GET Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
       }
       return data;
     });
