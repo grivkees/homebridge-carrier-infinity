@@ -27,6 +27,7 @@ import {
   Observable,
   of,
   ReplaySubject,
+  Subject,
   Subscription,
   switchMap,
   take,
@@ -45,6 +46,9 @@ export type TempWithUnit = [number, string];
 
 abstract class BaseModel<T extends object> {
   public data$ = new ReplaySubject<T>(1);
+  // reference for use read/write child classes that override data$
+  protected clean_data$ = this.data$;
+
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
   protected log: Logger = new PrefixLogger(this.infinity_client.log, 'API');
@@ -140,7 +144,8 @@ export class LocationsModel extends BaseModel<Location> {
 }
 
 abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
-  protected last_fetched_ts = 0;  // TODO use this
+  protected last_fetched_ts = 0;
+  protected last_fetched_hash = '';
   protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime']);
 
   constructor(
@@ -156,7 +161,9 @@ abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
     const top_level_key = Object.keys(data_object)[0];
     const ts = data_object[top_level_key].timestamp[0];
     this.last_fetched_ts = Date.parse(ts);
+    this.last_fetched_hash = this.hash(data_object);
     this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_fetched_ts})`);
+    this.log.debug(`HASH ${this.getPath()} hashes to (${this.last_fetched_hash})`);
     return data_object;
   }
 }
@@ -281,14 +288,15 @@ export class SystemStatusZoneModel {
 }
 
 export class SystemConfigModel extends BaseSystemModel<Config> {
-  // This will always hold the 'clean' version of the config, that is not subject
-  // to being changed by set methods.
-  private clean_data$: ReplaySubject<Config>;
-  private latest_clean_data_hash: string | undefined = undefined;
-  // dirty indicates the local data$ has been modified
-  protected dirty = false;
+  // This will always hold the 'dirty' version of the config. This is what is
+  // changed by set methods.
+  private dirty_data$ = new ReplaySubject<Config>(1);
+  // This combines the clean and dirty data and is what is used by api observers.
+  public data$ = new ReplaySubject<Config>(1);
+
+  // Indicates the local data$ has been modified, and clean_data$ should only be
+  // used after if it is from after this time.
   private last_pushed_ts = 0;
-  private latest_clean: Config | undefined = undefined; // TODO DELTE
 
   constructor(
     protected readonly infinity_client: InfinityRestClient,
@@ -297,23 +305,31 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   ) {
     super(infinity_client, serialNumber, log);
 
-    // Set aside a 'clean' Subject
-    this.clean_data$ = this.data$;
-    this.clean_data$.subscribe(data => {
-      this.latest_clean_data_hash = this.hash(data);
-    });
+    // Use the Subject created by the parent class as 'clean'.
+    // this.clean_data$ = super.data$;
+    // super.data$.subscribe(this.clean_data$);
 
-    // Make new 'dirty'-able Subject, this will track the api and accept changes ...
-    this.data$ = new ReplaySubject<Config>(1);
-    this.clean_data$.pipe(
-      // ... but it only tracks the api when the local data is 'clean'.
-      filter((data) => Date.parse(data.config.timestamp[0]) >= this.last_pushed_ts),
+    // Set up Subject that combines the clean and dirty data.
+    merge(
+      this.clean_data$.asObservable().pipe(
+        // When a push is active, do not pass clean data unless it is from after
+        // the push.
+        filter(() => this.last_fetched_ts >= this.last_pushed_ts),
+        map(data => {
+          this.log.error(`glenlog passing clean from ts ${this.last_fetched_ts} > ${this.last_pushed_ts}`);
+          return data;
+        }),
+      ),
+      this.dirty_data$.asObservable().pipe(
+        map(data => {
+          this.log.error(`glenlog passing dirty from ts ${this.last_pushed_ts}`);
+          return data;
+        }),
+      ),
     ).subscribe(this.data$);
 
-    // Send changes to $data back to the carrier api ...
-    this.data$.pipe(
-      // ... but only when we know the local data is 'dirty' aka modified by HK.
-      filter(() => this.last_pushed_ts > this.last_fetched_ts),
+    // Send changes from the dirty Subject back to the carrier api.
+    this.dirty_data$.pipe(
       // Wait x seconds after last change before sending.
       debounceTime(3 * 1000),
     ).subscribe(async data => this.push(data));
@@ -447,16 +463,26 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   // }
 
   private async push(data: Config): Promise<void> {
+    // Pause clean data use until we see an update from after now.
+    this.last_pushed_ts = Date.now();
+
     // If nothing actually changed, no need to push.
     const dirty_hash = this.hash(data);
-    if (this.latest_clean_data_hash === dirty_hash) {
+    if (this.last_fetched_hash === dirty_hash) {
       this.log.warn('Config doesn\'t appear to have changed. No changes sent.');
+      this.last_pushed_ts = 0;  // revert to clean config
       return;
     }
 
-    // Make sure the base config revision is not outdated
+    // Make sure the config base revision is not outdated
+    // TODO explicitly track and check base rev of dirty
+    const prev_last_fetched_hash = this.last_fetched_hash;
+    const prev_last_fetched_ts = this.last_fetched_ts;
     const new_clean_data = await this.forceFetch();
-    if (this.latest_clean_data_hash !== this.hash(new_clean_data)) {
+    if (
+      this.last_fetched_hash !== prev_last_fetched_hash ||
+      this.last_fetched_ts !== prev_last_fetched_ts
+    ) {
       this.log.error('Aborting Push: API shows a newer, modified config.');
       this.last_pushed_ts = 0;  // revert to clean config
       this.clean_data$.next(new_clean_data); // share new config
@@ -464,19 +490,19 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     }
 
     // Send the update
-    this.last_pushed_ts = Date.now();
     await this.forcePush(data);
 
     // Wait for a bit, and confirm if we see the api update on the server
     this.clean_data$.pipe(
       // Check for the next x seconds
-      timeout(10 * 1000),
+      timeout(15 * 1000),
       // Stop looking when we see the first successful update appear
-      filter(data => dirty_hash === this.hash(data)),
+      filter(() => dirty_hash === this.last_fetched_hash),
       take(1),
     ).subscribe({
       next: () => {
         this.log.info('Successful propagation to carrier api is confirmed.');
+        // TODO make sure timestamp is changed, and make sure we don't regress on ts
       },
       // As a fail-safe, revert to clean config if update failed
       error: () => {
@@ -492,6 +518,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
   private async forcePush(data: Config): Promise<void> {
     this.log.info('Pushing changes to carrier api...');
+
     const builder = new xml2js.Builder();
     const new_xml = builder.buildObject(data);
     const post_data = `data=${encodeURIComponent(new_xml)}`;
@@ -504,14 +531,16 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
         },
       },
     );
+
+    this.log.debug(`TIMESTAMP UPDATED CONFIG reports \${ts} (${this.last_pushed_ts})`);
+    this.log.debug(`HASH UPDATED CONFIG hashes to (${this.hash(data)})`);
   }
 
   async setMode(mode: string): Promise<void> {
     this.log.debug('Setting mode to ' + mode);
     const data = await firstValueFrom(this.data$);
     data.config.mode[0] = mode;
-    this.last_pushed_ts = Date.now() + 10 * 1000;  // set to future to stop fetch
-    this.data$.next(data);
+    this.dirty_data$.next(data);
   }
 
   async setZoneActivityHold(
@@ -531,8 +560,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     zone_obj['otmr'][0] = activity ? hold_until || '' : '';
 
     // Push changes
-    this.last_pushed_ts = Date.now() + 10 * 1000;  // set to future to stop fetch
-    this.data$.next(data);
+    this.dirty_data$.next(data);
   }
 
   // async setZoneActivityManualHold(
@@ -632,6 +660,7 @@ export class SystemConfigZoneModel {
 
   // TODO this could be made better, and more similar to above.
   // maybe merge into one fxn?
+  // TODO: this doesnt seem to work right, add tests
   public next_activity_time = this.zone.pipe(map(zone => {
     const now = new Date();
     const program_obj = zone.program![0];
