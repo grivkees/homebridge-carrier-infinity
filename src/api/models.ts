@@ -45,9 +45,10 @@ import EventEmitter from 'events';
 export type TempWithUnit = [number, string];
 
 abstract class BaseModel<T extends object> {
-  public data$ = new ReplaySubject<T>(1);
-  // reference for use read/write child classes that override data$
-  protected clean_data$ = this.data$;
+  // Raw clean api data for use inside class and in children.
+  protected clean_data$ = new ReplaySubject<T>(1);
+  // Protected form for use outside the class
+  public data$ = this.clean_data$.asObservable();
 
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
@@ -77,7 +78,7 @@ abstract class BaseModel<T extends object> {
       ),
       distinctUntilChanged((prev, cur) => this.isUnchanged(prev, cur)),
     // Send data to the BehaviorSubject/Observable.
-    ).subscribe(this.data$);
+    ).subscribe(this.clean_data$);
   }
 
   abstract getPath(): string;
@@ -270,6 +271,7 @@ export class SystemStatusZoneModel {
     debounceTime(50),
     map(([zone, temp_units]) => [Number(zone.rt[0]), temp_units] as TempWithUnit),
     distinctUntilChanged(),
+    // TODO: this maybe is bouncing because of floating point differences?
   );
 
   public cool_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(
@@ -291,8 +293,16 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   // This will always hold the 'dirty' version of the config. This is what is
   // changed by set methods.
   private dirty_data$ = new ReplaySubject<Config>(1);
+
   // This combines the clean and dirty data and is what is used by api observers.
-  public data$ = new ReplaySubject<Config>(1);
+  public data$ = merge(
+    this.clean_data$.pipe(
+      // When a push is active, do not pass clean data unless it is from after
+      // the push.
+      filter(() => this.last_fetched_ts >= this.last_pushed_ts),
+    ),
+    this.dirty_data$,
+  );
 
   // Indicates the local data$ has been modified, and clean_data$ should only be
   // used after if it is from after this time.
@@ -304,29 +314,6 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     protected readonly log: Logger,
   ) {
     super(infinity_client, serialNumber, log);
-
-    // Use the Subject created by the parent class as 'clean'.
-    // this.clean_data$ = super.data$;
-    // super.data$.subscribe(this.clean_data$);
-
-    // Set up Subject that combines the clean and dirty data.
-    merge(
-      this.clean_data$.asObservable().pipe(
-        // When a push is active, do not pass clean data unless it is from after
-        // the push.
-        filter(() => this.last_fetched_ts >= this.last_pushed_ts),
-        map(data => {
-          this.log.error(`glenlog passing clean from ts ${this.last_fetched_ts} > ${this.last_pushed_ts}`);
-          return data;
-        }),
-      ),
-      this.dirty_data$.asObservable().pipe(
-        map(data => {
-          this.log.error(`glenlog passing dirty from ts ${this.last_pushed_ts}`);
-          return data;
-        }),
-      ),
-    ).subscribe(this.data$);
 
     // Send changes from the dirty Subject back to the carrier api.
     this.dirty_data$.pipe(
@@ -347,7 +334,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   ]), distinctUntilChanged());
 
   private raw_zone_data$ = this.data$.pipe(map(data => data.config.zones[0].zone), distinctUntilChanged());
-
+  // TODO: make this zone filter common between here, status, and setters below
   public getZone(zone: string): SystemConfigZoneModel {
     // TODO assert valid zone
     // TODO save SystemConfigZoneModel to dedup
@@ -476,6 +463,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
     // Make sure the config base revision is not outdated
     // TODO explicitly track and check base rev of dirty
+    // TODO use old config directly, instead of these vars?
     const prev_last_fetched_hash = this.last_fetched_hash;
     const prev_last_fetched_ts = this.last_fetched_ts;
     const new_clean_data = await this.forceFetch();
@@ -502,7 +490,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     ).subscribe({
       next: () => {
         this.log.info('Successful propagation to carrier api is confirmed.');
-        // TODO make sure timestamp is changed, and make sure we don't regress on ts
+        // TODO this doesnt seem to be working. the hash seems to change on the api side
       },
       // As a fail-safe, revert to clean config if update failed
       error: () => {
