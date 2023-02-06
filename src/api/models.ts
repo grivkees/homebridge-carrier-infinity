@@ -119,6 +119,7 @@ abstract class BaseModel<T extends object> {
     await this.infinity_client.activate();
     const response = await this.infinity_client.axios.get(this.getPath());
     if (response.data) {
+      // this.log.error(`glenlog fetch: ${response.data}`);
       return await xml2js.parseStringPromise(response.data);
     } else {
       this.log.debug(response.data);
@@ -147,7 +148,7 @@ export class LocationsModel extends BaseModel<Location> {
 abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
   protected last_fetched_ts = 0;
   protected last_fetched_hash = '';
-  protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime']);
+  protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime', 'previousMode']);
 
   constructor(
     protected readonly infinity_client: InfinityRestClient,
@@ -161,6 +162,7 @@ abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
     const data_object = await super.forceFetch();
     const top_level_key = Object.keys(data_object)[0];
     const ts = data_object[top_level_key].timestamp[0];
+    // TODO there is something problematic about using these
     this.last_fetched_ts = Date.parse(ts);
     this.last_fetched_hash = this.hash(data_object);
     this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_fetched_ts})`);
@@ -456,7 +458,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     // If nothing actually changed, no need to push.
     const dirty_hash = this.hash(data);
     if (this.last_fetched_hash === dirty_hash) {
-      this.log.warn('Config doesn\'t appear to have changed. No changes sent.');
+      this.log.warn(`Config (hash=${dirty_hash}) doesn't appear to have changed. No changes sent.`);
       this.last_pushed_ts = 0;  // revert to clean config
       return;
     }
@@ -485,12 +487,12 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
       // Check for the next x seconds
       timeout(15 * 1000),
       // Stop looking when we see the first successful update appear
-      filter(() => dirty_hash === this.last_fetched_hash),
+      filter((new_clean_data) => dirty_hash === this.hash(new_clean_data)),
       take(1),
     ).subscribe({
       next: () => {
         this.log.info('Successful propagation to carrier api is confirmed.');
-        // TODO this doesnt seem to be working. the hash seems to change on the api side
+        this.events.emit('onGet'); // TODO: pick different event
       },
       // As a fail-safe, revert to clean config if update failed
       error: () => {
@@ -500,8 +502,8 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
       },
     });
 
-    // Schedule an update to jump start the verification above
-    this.events.emit('onGet');  // TODO: pick different event
+    // Poll for updates for the verification above
+    this.events.emit('onGet');
   }
 
   private async forcePush(data: Config): Promise<void> {
@@ -509,6 +511,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
     const builder = new xml2js.Builder();
     const new_xml = builder.buildObject(data);
+    // this.log.error(`glenlog push: ${new_xml.replace(/(\r\n|\n)/g, '')}`);
     const post_data = `data=${encodeURIComponent(new_xml)}`;
     await this.infinity_client.axios.post(
       this.getPath(),

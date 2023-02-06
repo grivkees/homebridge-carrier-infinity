@@ -66,6 +66,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     for (const serialNumber of systems) {
       // Create system api object, and save for later reference
       const system = await new SystemModel(this.infinity_client, serialNumber);
+      // TODO make sure we can fetch all api calls, and timeout if not.
       this.systems[serialNumber] = system;
 
       // Add system based accessories
