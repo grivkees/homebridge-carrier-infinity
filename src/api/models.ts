@@ -36,6 +36,7 @@ import {
   timeout,
 } from 'rxjs';
 import EventEmitter from 'events';
+import { find_zone_by_id } from './helpers';
 
 // TODO: change public to read only
 // TODO: make F to C rounding consistent for value deduping
@@ -219,9 +220,7 @@ export class SystemStatusModel extends BaseSystemModel<Status> {
     // TODO assert valid zone
     // TODO save SystemStatusZoneModel to dedup
     return new SystemStatusZoneModel(this.raw_zone_data$.pipe(map(
-      data => data.find(
-        (z) => z['$'].id === zone.toString(),
-      )!,
+      data => find_zone_by_id(data, zone),
     )), this.temp_units);
   }
 }
@@ -301,7 +300,8 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     this.clean_data$.pipe(
       // When a push is active, do not pass clean data unless it is from after
       // the push.
-      filter(() => this.last_fetched_ts >= this.last_pushed_ts),
+      // TODO add an OR to allow if the clean data matches the last dirty
+      filter((data) => Date.parse(data.config.timestamp[0]) >= this.last_pushed_ts),
     ),
     this.dirty_data$,
   );
@@ -322,6 +322,11 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
       // Wait x seconds after last change before sending.
       debounceTime(3 * 1000),
     ).subscribe(async data => this.push(data));
+
+    // ATTEMPT TO GET DIRTY AND CLEAN TODO REMOVE ME
+    this.clean_data$.subscribe(() => this.log.error('glenlog: new clean'));
+    this.dirty_data$.subscribe(() => this.log.error('glenlog: new dirty'));
+    this.data$.subscribe(() => this.log.error('glenlog: new combined'));
   }
 
   getPath(): string {
@@ -341,18 +346,14 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     // TODO assert valid zone
     // TODO save SystemConfigZoneModel to dedup
     return new SystemConfigZoneModel(this.raw_zone_data$.pipe(map(
-      data => data.find(
-        (z) => z['$'].id === zone.toString(),
-      )!,
+      data => find_zone_by_id(data, zone),
     )), this.temp_units);
   }
 
   // TODO: DELETE ME
   async getZoneActivity(zone: string): Promise<string> {
     const data = await firstValueFrom(this.data$);
-    const zone_obj = data.config.zones[0].zone.find(
-      (z) => z['$'].id === zone.toString(),
-    )!;
+    const zone_obj = find_zone_by_id(data.config.zones[0].zone, zone);
 
     if (zone_obj.hold[0] === STATUS.ON) {
       return zone_obj.holdActivity![0];
@@ -394,9 +395,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
       };
     }
 
-    const zone_obj = data.config.zones[0].zone.find(
-      (z) => z['$'].id === zone.toString(),
-    )!;
+    const zone_obj = find_zone_by_id(data.config.zones[0].zone, zone);
     const activities_obj = zone_obj.activities![0];
     return activities_obj['activity'].find(
       (activity: CActivity) => activity['$'].id === activity_name,
@@ -452,20 +451,28 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   // }
 
   private async push(data: Config): Promise<void> {
+    this.log.info('Start pushing changes to carrier api...');
+
     // Pause clean data use until we see an update from after now.
-    this.last_pushed_ts = Date.now();
+    const now = new Date();
+    this.last_pushed_ts = now.valueOf();
+    // TODO this doesnt seem to actually change the first fetched clean response
+    data.config.timestamp[0] = now.toISOString();
 
     // If nothing actually changed, no need to push.
     const dirty_hash = this.hash(data);
-    if (this.last_fetched_hash === dirty_hash) {
-      this.log.warn(`Config (hash=${dirty_hash}) doesn't appear to have changed. No changes sent.`);
-      this.last_pushed_ts = 0;  // revert to clean config
-      return;
-    }
+    // TODO add back in this check
+    // if (this.last_fetched_hash === dirty_hash) {
+    //   this.log.warn(`Config (hash=${dirty_hash}) doesn't appear to have changed. No changes sent.`);
+    //   this.last_pushed_ts = 0;  // revert to clean config
+    //   return;
+    // }
 
     // Make sure the config base revision is not outdated
     // TODO explicitly track and check base rev of dirty
     // TODO use old config directly, instead of these vars?
+    // TODO make this just check that fields we dont play with havent changed
+    // aka hash not changed minus things we modify
     const prev_last_fetched_hash = this.last_fetched_hash;
     const prev_last_fetched_ts = this.last_fetched_ts;
     const new_clean_data = await this.forceFetch();
@@ -507,7 +514,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   }
 
   private async forcePush(data: Config): Promise<void> {
-    this.log.info('Pushing changes to carrier api...');
+    this.log.info('... sending changes to carrier api...');
 
     const builder = new xml2js.Builder();
     const new_xml = builder.buildObject(data);
@@ -523,13 +530,16 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
       },
     );
 
-    this.log.debug(`TIMESTAMP UPDATED CONFIG reports \${ts} (${this.last_pushed_ts})`);
+    this.log.debug(`TIMESTAMP UPDATED CONFIG reports ${data.config.timestamp[0]} (${this.last_pushed_ts})`);
     this.log.debug(`HASH UPDATED CONFIG hashes to (${this.hash(data)})`);
+    this.log.info('... done sending changes to carrier api.');
   }
 
   async setMode(mode: string): Promise<void> {
     this.log.debug('Setting mode to ' + mode);
     const data = await firstValueFrom(this.data$);
+    // TODO does the first fetched clean actually show this?
+    // data.config.previousMode[0] = data.config.mode[0];
     data.config.mode[0] = mode;
     this.dirty_data$.next(data);
   }
@@ -543,9 +553,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
     // Get data from zone object and make changes
     const data = await firstValueFrom(this.data$);
-    const zone_obj = data.config.zones[0].zone.find(
-      (z) => z['$'].id === zone.toString(),
-    )!;
+    const zone_obj = find_zone_by_id(data.config.zones[0].zone, zone);
     zone_obj['holdActivity']![0] = activity;
     zone_obj['hold'][0] = activity ? STATUS.ON : STATUS.OFF;
     zone_obj['otmr'][0] = activity ? hold_until || '' : '';
