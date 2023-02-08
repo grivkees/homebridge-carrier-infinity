@@ -36,7 +36,7 @@ import {
   timeout,
 } from 'rxjs';
 import EventEmitter from 'events';
-import { find_zone_by_id } from './helpers';
+import { find_zone_by_id, getZoneActivityConfig } from './helpers';
 
 // TODO: change public to read only
 // TODO: make F to C rounding consistent for value deduping
@@ -350,105 +350,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     )), this.temp_units);
   }
 
-  // TODO: DELETE ME
-  async getZoneActivity(zone: string): Promise<string> {
-    const data = await firstValueFrom(this.data$);
-    const zone_obj = find_zone_by_id(data.config.zones[0].zone, zone);
-
-    if (zone_obj.hold[0] === STATUS.ON) {
-      return zone_obj.holdActivity![0];
-    } else {
-      const now = new Date();
-      const program_obj = zone_obj.program![0];
-      const today_schedule = program_obj.day[now.getDay()].period.filter(period => period.enabled[0] === STATUS.ON).reverse();
-      for (const i in today_schedule) {
-        const time = today_schedule[i].time[0];
-        const split = time.split(':');
-        if (
-          // The hour is past
-          Number(split[0]) < now.getHours() ||
-          // The hour is now, the minute is past
-          (Number(split[0]) === now.getHours() && Number(split[1]) < now.getMinutes())
-        ) {
-          return today_schedule[i].activity[0];
-        }
-      }
-      // If we got to the end without finding the next activity, it means the activity is the last from yesterday
-      const yesterday_schedule = program_obj['day'][(now.getDay() + 8) % 7].period.filter(
-        period => period.enabled[0] === STATUS.ON,
-      ).reverse();
-      return yesterday_schedule[0].activity[0];
-    }
-  }
-
-  // TODO: DELETE ME
-  private async getZoneActivityConfig(zone: string, activity_name: string): Promise<CActivity> {
-    const data = await firstValueFrom(this.data$);
-    // Vacation is stored somewhere else...
-    if (activity_name === ACTIVITY.VACATION) {
-      return {
-        '$': {id: ACTIVITY.VACATION},
-        clsp: data.config.vacmaxt,
-        htsp: data.config.vacmint,
-        fan: data.config.vacfan,
-        previousFan: [],
-      };
-    }
-
-    const zone_obj = find_zone_by_id(data.config.zones[0].zone, zone);
-    const activities_obj = zone_obj.activities![0];
-    return activities_obj['activity'].find(
-      (activity: CActivity) => activity['$'].id === activity_name,
-    )!;
-  }
-
-
   /* Write APIs */
-  // mutations: (() => Promise<void>)[] = [];
-
-  // private async push(): Promise<void> {
-  //   // Wait a bit so we can catch other mutations that came in around the
-  //   // same time.
-  //   await new Promise(r => setTimeout(r, 2000));
-  //   // We only ever need 2 pushes ongoing at a time. One active, and one pending.
-  //   // The first one will handle mutations available at its start, and the next
-  //   // one will cover mutations that arrived during the previous's run.
-  //   // First, to make sure we only ever have one 'pending' push, cancel any other
-  //   // possible 'pending' pushes, and make this one become the 'pending' push.
-  //   this.write_lock.cancel();
-  //   // Then, grab the lock. so this push can move from 'pending' to 'active'.
-  //   try {
-  //     await this.write_lock.runExclusive(async () => {
-  //     // 1. Do mutations
-  //       const mutated_hash = await this.mutate();
-  //       if (mutated_hash === null) {
-  //         return;
-  //       }
-  //       // 2. Push
-  //       await this.forcePush();
-  //       this.log.info('... pushing changes complete.');
-  //       // 3. Confirm
-  //       await new Promise(r => setTimeout(r, 5000));
-  //       await this.forceFetch();
-  //       if (mutated_hash === this.hash(await firstValueFrom(this.data$))) {
-  //         this.log.debug('Successful propagation to carrier api is confirmed.');
-  //       } else {
-  //         this.log.warn('Changes do not (yet?) appear to have propagated to the carrier api.');
-  //       }
-  //     });
-  //   } catch (e) {
-  //     if (e === E_CANCELED) {
-  //       return;
-  //     } else if (e === E_TIMEOUT || e === E_ALREADY_LOCKED) {
-  //       this.log.error(`Deadlock on push ${e}. Report bug: https://bit.ly/3igbU7D`);
-  //     } else {
-  //       this.log.error(
-  //         'Failed to push updates: ',
-  //         Axios.isAxiosError(e) ? e.message : e,
-  //       );
-  //     }
-  //   }
-  // }
 
   private async push(data: Config): Promise<void> {
     this.log.info('Start pushing changes to carrier api...');
@@ -562,65 +464,81 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     this.dirty_data$.next(data);
   }
 
-  // async setZoneActivityManualHold(
-  //   zone: string,
-  //   clsp: number | null,
-  //   htsp: number | null,
-  //   hold_until: string | null,
-  //   fan: string | null = null,
-  // ): Promise<void> {
-  //   // Modify MANUAL activity to the requested setpoints
-  //   this.mutations.push(async () => {
-  //     await this.mutateZoneActivityManualHold(zone, clsp, htsp, fan);
-  //   });
-  //   // Set hold to MANUAL activity
-  //   this.mutations.push(async () => {
-  //     await this.mutateZoneActivityHold(zone, ACTIVITY.MANUAL, hold_until);
-  //   });
-  //   // Schedule the push event, but don't wait for it to return.
-  //   this.push();
-  // }
+  // This makes the manual activity match another named activity. This is useful
+  // before switching to the manual activity to make sure only the setpoint you
+  // intend to change is changed.
+  async setZoneActivityManualSync(
+    zone: string,
+    sync_from_activity_name: string,
+  ): Promise<void> {
+    // Get data from zone / activity
+    const data = await firstValueFrom(this.data$);
+    const manual_activity_obj = getZoneActivityConfig(data, zone, ACTIVITY.MANUAL);
 
-  // private async mutateZoneActivityManualHold(
-  //   zone: string,
-  //   clsp: number | null,
-  //   htsp: number | null,
-  //   fan: string | null = null,
-  // ): Promise<void> {
-  //   this.log.debug(
-  //     `Setting zone ${zone} to`,
-  //     clsp ? `clsp=${clsp}` : '',
-  //     htsp ? `htsp=${htsp}` : '',
-  //     fan ? `fan=${fan}` : '',
-  //     '.',
-  //   );
-  //   const zone_obj = await this.getZone(zone);
-  //   // When moving to manual activity, default to prev activity settings.
-  //   const manual_activity_obj = await this.getZoneActivityConfig(zone, ACTIVITY.MANUAL);
-  //   if (zone_obj['holdActivity']![0] !== ACTIVITY.MANUAL) {
-  //     const prev_activity_obj = await this.getZoneActivityConfig(
-  //       zone,
-  //       await this.getZoneActivity(zone),
-  //     );
-  //     manual_activity_obj['clsp'][0] = prev_activity_obj['clsp'][0];
-  //     manual_activity_obj['htsp'][0] = prev_activity_obj['htsp'][0];
-  //     manual_activity_obj['fan'][0] = prev_activity_obj['fan'][0];
-  //   }
-  //   // Set setpoints on manual activity
-  //   [htsp, clsp] = processSetpointDeadband(
-  //     htsp || parseFloat(manual_activity_obj['htsp'][0]),
-  //     clsp || parseFloat(manual_activity_obj['clsp'][0]),
-  //     await firstValueFrom(this.temp_units),
-  //     // when setpoints are too close, make clsp sticky when no change made to htsp
-  //     htsp === null,
-  //   );
-  //   manual_activity_obj['htsp'][0] = htsp.toFixed(1);
-  //   manual_activity_obj['clsp'][0] = clsp.toFixed(1);
-  //   // Set fan on manual activity
-  //   if (fan) {
-  //     manual_activity_obj['fan'][0] = fan;
-  //   }
-  // }
+    // Modify MANUAL activity to match current activity
+    if (
+      sync_from_activity_name &&
+      sync_from_activity_name !== ACTIVITY.MANUAL
+    ) {
+      const prev_activity_obj = getZoneActivityConfig(
+        data,
+        zone,
+        sync_from_activity_name,
+      );
+      manual_activity_obj['clsp'][0] = prev_activity_obj['clsp'][0];
+      manual_activity_obj['htsp'][0] = prev_activity_obj['htsp'][0];
+      manual_activity_obj['fan'][0] = prev_activity_obj['fan'][0];
+    }
+
+    // Push changes
+    this.dirty_data$.next(data);
+  }
+
+  async setZoneActivityManualSetpoints(
+    zone: string,
+    clsp: number | null,
+    htsp: number | null,
+  ): Promise<void> {
+    this.log.debug(
+      `Setting zone ${zone} to`,
+      clsp ? `clsp=${clsp}` : '',
+      htsp ? `htsp=${htsp}` : '',
+      '.',
+    );
+
+    // Get data from zone / activity
+    const data = await firstValueFrom(this.data$);
+    const manual_activity_obj = getZoneActivityConfig(data, zone, ACTIVITY.MANUAL);
+
+    // Set setpoints on manual activity
+    [htsp, clsp] = processSetpointDeadband(
+      htsp || parseFloat(manual_activity_obj['htsp'][0]),
+      clsp || parseFloat(manual_activity_obj['clsp'][0]),
+      data.config.cfgem[0],
+      // when setpoints are too close, make clsp sticky when no change made to htsp
+      htsp === null,
+    );
+    manual_activity_obj['htsp'][0] = htsp.toFixed(1);
+    manual_activity_obj['clsp'][0] = clsp.toFixed(1);
+
+    // Push changes
+    this.dirty_data$.next(data);
+  }
+
+  async setZoneActivityManualFan(
+    zone: string,
+    fan: string,
+  ): Promise<void> {
+    this.log.debug(`Setting zone ${zone} to fan=${fan}.`);
+
+    // Get data from zone / activity
+    const data = await firstValueFrom(this.data$);
+    const manual_activity_obj = getZoneActivityConfig(data, zone, ACTIVITY.MANUAL);
+    manual_activity_obj['fan'][0] = fan;
+
+    // Push changes
+    this.dirty_data$.next(data);
+  }
 }
 
 export class SystemConfigZoneModel {
