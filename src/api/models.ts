@@ -36,7 +36,7 @@ import {
   timeout,
 } from 'rxjs';
 import EventEmitter from 'events';
-import { find_zone_by_id, getZoneActivityConfig } from './helpers';
+import { findZoneByID, getZoneActivityConfig } from './helpers';
 
 // TODO: change public to read only
 // TODO: make F to C rounding consistent for value deduping
@@ -220,7 +220,7 @@ export class SystemStatusModel extends BaseSystemModel<Status> {
     // TODO assert valid zone
     // TODO save SystemStatusZoneModel to dedup
     return new SystemStatusZoneModel(this.raw_zone_data$.pipe(map(
-      data => find_zone_by_id(data, zone),
+      data => findZoneByID(data, zone),
     )), this.temp_units);
   }
 }
@@ -346,7 +346,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     // TODO assert valid zone
     // TODO save SystemConfigZoneModel to dedup
     return new SystemConfigZoneModel(this.raw_zone_data$.pipe(map(
-      data => find_zone_by_id(data, zone),
+      data => findZoneByID(data, zone),
     )), this.temp_units);
   }
 
@@ -455,7 +455,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
     // Get data from zone object and make changes
     const data = await firstValueFrom(this.data$);
-    const zone_obj = find_zone_by_id(data.config.zones[0].zone, zone);
+    const zone_obj = findZoneByID(data.config.zones[0].zone, zone);
     zone_obj['holdActivity']![0] = activity;
     zone_obj['hold'][0] = activity ? STATUS.ON : STATUS.OFF;
     zone_obj['otmr'][0] = activity ? hold_until || '' : '';
