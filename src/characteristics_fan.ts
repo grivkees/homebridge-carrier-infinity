@@ -1,8 +1,8 @@
 import { CharacteristicValue } from 'homebridge';
 import { ThermostatCharacteristicWrapper, MultiWrapper } from './characteristics_base';
 import { convertCharFan2SystemFan, convertSystemFan2CharFan } from './helpers';
-import { FAN_MODE, SYSTEM_MODE } from './api/constants';
-import { combineLatest, debounceTime, distinctUntilChanged, map, of } from 'rxjs';
+import { ACTIVITY, FAN_MODE, SYSTEM_MODE } from './api/constants';
+import { combineLatest, debounceTime, distinctUntilChanged, firstValueFrom, map, of } from 'rxjs';
 
 /*
  * Controls for system fan.
@@ -55,27 +55,36 @@ class FanStatus extends ThermostatCharacteristicWrapper {
     distinctUntilChanged(),
   );
 
-  // set = async (value: CharacteristicValue) => {
-  //   // if we are trying to *turn on* fan, and system is off, set to fan only mode
-  //   if (
-  //     value === this.Characteristic.Active.ACTIVE &&
-  //     await this.system.config.getMode() === SYSTEM_MODE.OFF
-  //   ) {
-  //     return await this.system.config.setMode(SYSTEM_MODE.FAN_ONLY);
-  //   }
+  set = async (value: CharacteristicValue) => {
+    // if we are trying to *turn on* fan, and system is off, set to fan only mode
+    if (
+      value === this.Characteristic.Active.ACTIVE &&
+      await firstValueFrom(this.system.config.mode) === SYSTEM_MODE.OFF
+    ) {
+      return await this.system.config.setMode(SYSTEM_MODE.FAN_ONLY);
+    }
 
-  //   // if we are trying to turn off fan, turn off fan override (i.e. set fan speed=auto)
-  //   // NOTE: If system is in FAN_ONLY mode, it will remain in FAN ONLY, but with speed=auto.
-  //   if (value === this.Characteristic.Active.INACTIVE) {
-  //     return await this.system.config.setZoneActivityManualHold(
-  //       this.context.zone,
-  //       null,
-  //       null,
-  //       await this.getHoldTime(),
-  //       FAN_MODE.OFF,
-  //     );
-  //   }
-  // };
+    // if we are trying to turn off fan, turn off fan override (i.e. set fan speed=auto)
+    // NOTE: If system is in FAN_ONLY mode, it will remain in FAN ONLY, but with speed=auto.
+    if (value === this.Characteristic.Active.INACTIVE) {
+      // Sync current activity settings to manual activity
+      await this.system.config.setZoneActivityManualSync(
+        this.context.zone,
+        await firstValueFrom(this.system.getZoneActivity(this.context.zone)),
+      );
+      // Update manual activity fan speed
+      await this.system.config.setZoneActivityManualFan(
+        this.context.zone,
+        FAN_MODE.OFF,
+      );
+      // Enable manual activity hold
+      await this.system.config.setZoneActivityHold(
+        this.context.zone,
+        ACTIVITY.MANUAL,
+        await this.getHoldTime(),
+      );
+    }
+  };
 }
 
 class FanState extends ThermostatCharacteristicWrapper {
@@ -118,21 +127,29 @@ class FanSpeed extends ThermostatCharacteristicWrapper {
   props = of({minValue: 0, maxValue: 3, minStep: 1});
   value = this.system.config.getZone(this.context.zone).fan.pipe(map(data => convertSystemFan2CharFan(data)));
 
-  // set = async (value: CharacteristicValue) => {
-  //   // if we are trying to control fan, and system is off, set to fan only mode
-  //   if (await this.system.config.getMode() === SYSTEM_MODE.OFF) {
-  //     await this.system.config.setMode(SYSTEM_MODE.FAN_ONLY);
-  //   }
+  set = async (value: CharacteristicValue) => {
+    // if we are trying to control fan, and system is off, set to fan only mode
+    if (await firstValueFrom(this.system.config.mode) === SYSTEM_MODE.OFF) {
+      await this.system.config.setMode(SYSTEM_MODE.FAN_ONLY);
+    }
 
-  //   // set fan speed
-  //   return await this.system.config.setZoneActivityManualHold(
-  //     this.context.zone,
-  //     null,
-  //     null,
-  //     await this.getHoldTime(),
-  //     convertCharFan2SystemFan(value),
-  //   );
-  // };
+    // Sync current activity settings to manual activity
+    await this.system.config.setZoneActivityManualSync(
+      this.context.zone,
+      await firstValueFrom(this.system.getZoneActivity(this.context.zone)),
+    );
+    // Update manual activity fan speed
+    await this.system.config.setZoneActivityManualFan(
+      this.context.zone,
+      convertCharFan2SystemFan(value),
+    );
+    // Enable manual activity hold
+    await this.system.config.setZoneActivityHold(
+      this.context.zone,
+      ACTIVITY.MANUAL,
+      await this.getHoldTime(),
+    );
+  };
 }
 
 class TargetFanState extends ThermostatCharacteristicWrapper {
@@ -143,23 +160,31 @@ class TargetFanState extends ThermostatCharacteristicWrapper {
       this.Characteristic.TargetFanState.MANUAL),
   );
 
-  // set = async (value: CharacteristicValue) => {
-  //   // if we are trying to control fan, and system is off, set to fan only mode
-  //   if (await this.system.config.getMode() === SYSTEM_MODE.OFF) {
-  //     await this.system.config.setMode(SYSTEM_MODE.FAN_ONLY);
-  //   }
+  set = async (value: CharacteristicValue) => {
+    // if we are trying to control fan, and system is off, set to fan only mode
+    if (await firstValueFrom(this.system.config.mode) === SYSTEM_MODE.OFF) {
+      await this.system.config.setMode(SYSTEM_MODE.FAN_ONLY);
+    }
 
-  //   // set fan speed to switch between auto and manual
-  //   return await this.system.config.setZoneActivityManualHold(
-  //     this.context.zone,
-  //     null,
-  //     null,
-  //     await this.getHoldTime(),
-  //     value === this.Characteristic.TargetFanState.AUTO ?
-  //       FAN_MODE.OFF :  // fan off is auto
-  //       FAN_MODE.MED, // moving to manual defaults to med
-  //   );
-  // };
+    // Sync current activity settings to manual activity
+    await this.system.config.setZoneActivityManualSync(
+      this.context.zone,
+      await firstValueFrom(this.system.getZoneActivity(this.context.zone)),
+    );
+    // Update manual activity fan speed to switch between auto and manual
+    await this.system.config.setZoneActivityManualFan(
+      this.context.zone,
+      value === this.Characteristic.TargetFanState.AUTO ?
+        FAN_MODE.OFF :  // fan off is auto
+        FAN_MODE.MED, // moving to manual defaults to med
+    );
+    // Enable manual activity hold
+    await this.system.config.setZoneActivityHold(
+      this.context.zone,
+      ACTIVITY.MANUAL,
+      await this.getHoldTime(),
+    );
+  };
 }
 
 export class FanService extends MultiWrapper {

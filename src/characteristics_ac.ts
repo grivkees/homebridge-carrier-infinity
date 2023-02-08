@@ -1,7 +1,7 @@
 import { CharacteristicValue } from 'homebridge';
 import { ThermostatCharacteristicWrapper, MultiWrapper } from './characteristics_base';
 import { convertCharTemp2SystemTemp, convertSystemTemp2CharTemp } from './helpers';
-import { FAN_MODE, SYSTEM_MODE } from './api/constants';
+import { ACTIVITY, FAN_MODE, SYSTEM_MODE } from './api/constants';
 import { combineLatest, debounceTime, distinctUntilChanged, firstValueFrom, map } from 'rxjs';
 
 class CurrentACStatus extends ThermostatCharacteristicWrapper {
@@ -97,14 +97,25 @@ class CoolSetpoint extends ThermostatCharacteristicWrapper {
     ([temp, temp_unit]) => convertSystemTemp2CharTemp(temp, temp_unit),
   ));
 
-  // set = async (value: CharacteristicValue) => {
-  //   return await this.system.config.setZoneActivityManualHold(
-  //     this.context.zone,
-  //     convertCharTemp2SystemTemp(value, await this.system.config.getUnits()),
-  //     null,
-  //     await this.getHoldTime(),
-  //   );
-  // };
+  set = async (value: CharacteristicValue) => {
+    // Sync current activity settings to manual activity
+    await this.system.config.setZoneActivityManualSync(
+      this.context.zone,
+      await firstValueFrom(this.system.getZoneActivity(this.context.zone)),
+    );
+    // Update manual activity
+    await this.system.config.setZoneActivityManualSetpoints(
+      this.context.zone,
+      convertCharTemp2SystemTemp(value, await firstValueFrom(this.system.config.temp_units)),
+      null,
+    );
+    // Enable manual activity hold
+    await this.system.config.setZoneActivityHold(
+      this.context.zone,
+      ACTIVITY.MANUAL,
+      await this.getHoldTime(),
+    );
+  };
 }
 
 class HeatSetpoint extends ThermostatCharacteristicWrapper {
@@ -120,15 +131,25 @@ class HeatSetpoint extends ThermostatCharacteristicWrapper {
     ([temp, temp_unit]) => convertSystemTemp2CharTemp(temp, temp_unit),
   ));
 
-
-  // set = async (value: CharacteristicValue) => {
-  //   return await this.system.config.setZoneActivityManualHold(
-  //     this.context.zone,
-  //     null,
-  //     convertCharTemp2SystemTemp(value, await this.system.config.getUnits()),
-  //     await this.getHoldTime(),
-  //   );
-  // };
+  set = async (value: CharacteristicValue) => {
+    // Sync current activity settings to manual activity
+    await this.system.config.setZoneActivityManualSync(
+      this.context.zone,
+      await firstValueFrom(this.system.getZoneActivity(this.context.zone)),
+    );
+    // Update manual activity
+    await this.system.config.setZoneActivityManualSetpoints(
+      this.context.zone,
+      null,
+      convertCharTemp2SystemTemp(value, await firstValueFrom(this.system.config.temp_units)),
+    );
+    // Enable manual activity hold
+    await this.system.config.setZoneActivityHold(
+      this.context.zone,
+      ACTIVITY.MANUAL,
+      await this.getHoldTime(),
+    );
+  };
 }
 
 class GeneralSetpoint extends ThermostatCharacteristicWrapper {
@@ -168,32 +189,46 @@ class GeneralSetpoint extends ThermostatCharacteristicWrapper {
     distinctUntilChanged(),
   );
 
-  // set = async (value: CharacteristicValue) => {
-  //   const svalue = convertCharTemp2SystemTemp(value, await this.system.config.getUnits());
-  //   const mode = await this.system.config.getMode();
-  //   switch (mode) {
-  //     case SYSTEM_MODE.COOL:
-  //       return await this.system.config.setZoneActivityManualHold(
-  //         this.context.zone,
-  //         svalue,
-  //         null,
-  //         await this.getHoldTime(),
-  //       );
-  //     case SYSTEM_MODE.HEAT:
-  //       return await this.system.config.setZoneActivityManualHold(
-  //         this.context.zone,
-  //         null,
-  //         svalue,
-  //         await this.getHoldTime(),
-  //       );
-  //     case SYSTEM_MODE.AUTO:
-  //       // For auto mode, Cool/Heat setpoints are used
-  //       return;
-  //     default:
-  //       this.log.error(`Don't know how to set target temp for mode '${mode}'. Report bug: https://bit.ly/3igbU7D`);
-  //       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
-  //   }
-  // };
+  set = async (value: CharacteristicValue) => {
+    // Sync current activity settings to manual activity
+    await this.system.config.setZoneActivityManualSync(
+      this.context.zone,
+      await firstValueFrom(this.system.getZoneActivity(this.context.zone)),
+    );
+
+    // Update manual activity
+    const svalue = convertCharTemp2SystemTemp(value, await firstValueFrom(this.system.config.temp_units));
+    const mode = await firstValueFrom(this.system.config.mode);
+    switch (mode) {
+      case SYSTEM_MODE.COOL:
+        await this.system.config.setZoneActivityManualSetpoints(
+          this.context.zone,
+          svalue,
+          null,
+        );
+        break;
+      case SYSTEM_MODE.HEAT:
+        await this.system.config.setZoneActivityManualSetpoints(
+          this.context.zone,
+          null,
+          svalue,
+        );
+        break;
+      case SYSTEM_MODE.AUTO:
+        // For auto mode, Cool/Heat setpoints are used
+        break;
+      default:
+        this.log.error(`Don't know how to set target temp for mode '${mode}'. Report bug: https://bit.ly/3igbU7D`);
+        throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.INVALID_VALUE_IN_REQUEST);
+    }
+
+    // Enable manual activity hold
+    await this.system.config.setZoneActivityHold(
+      this.context.zone,
+      ACTIVITY.MANUAL,
+      await this.getHoldTime(),
+    );
+  };
 }
 
 export class ACService extends MultiWrapper {

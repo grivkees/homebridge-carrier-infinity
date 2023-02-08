@@ -473,12 +473,15 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   ): Promise<void> {
     // Get data from zone / activity
     const data = await firstValueFrom(this.data$);
+    const zone_obj = findZoneByID(data.config.zones[0].zone, zone);
     const manual_activity_obj = getZoneActivityConfig(data, zone, ACTIVITY.MANUAL);
 
-    // Modify MANUAL activity to match current activity
+    // Modify MANUAL activity to match current activity, but only if we have
+    // not already made the switch to manual.
     if (
       sync_from_activity_name &&
-      sync_from_activity_name !== ACTIVITY.MANUAL
+      sync_from_activity_name !== ACTIVITY.MANUAL &&
+      zone_obj.holdActivity[0] !== ACTIVITY.MANUAL
     ) {
       const prev_activity_obj = getZoneActivityConfig(
         data,
@@ -488,10 +491,10 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
       manual_activity_obj['clsp'][0] = prev_activity_obj['clsp'][0];
       manual_activity_obj['htsp'][0] = prev_activity_obj['htsp'][0];
       manual_activity_obj['fan'][0] = prev_activity_obj['fan'][0];
-    }
 
-    // Push changes
-    this.dirty_data$.next(data);
+      // Push changes
+      this.dirty_data$.next(data);
+    }
   }
 
   async setZoneActivityManualSetpoints(
