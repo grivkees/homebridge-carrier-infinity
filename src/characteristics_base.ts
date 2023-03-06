@@ -58,9 +58,9 @@ export abstract class CharacteristicWrapper extends Wrapper {
     this.value.subscribe(
       async data => {
         if (characteristic.value === data) {
-          this.log.warn(`BADPUSH Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
+          this.log.debug(`PUSH (unnecessary) Updating ${this.ctype.name} from ${characteristic.value} to ${data}`);
         } else {
-          this.log.warn(`PUSH Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
+          this.log.debug(`PUSH Updating ${this.ctype.name} from ${characteristic.value} to ${data}`);
         }
         characteristic.updateValue(data);
       },
@@ -73,7 +73,7 @@ export abstract class CharacteristicWrapper extends Wrapper {
       // ... and return immediately the last seen api value.
       const data = await firstValueFrom(this.value);
       if (characteristic.value !== data) {
-        this.log.warn(`GET Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
+        this.log.debug(`GET Updating ${this.ctype.name} from ${characteristic.value} to ${data}`);
       }
       return data;
     });
@@ -86,15 +86,6 @@ export abstract class CharacteristicWrapper extends Wrapper {
 
 export abstract class ThermostatCharacteristicWrapper extends CharacteristicWrapper {
   // TODO: check in constructor that context has zone and hold settings
-
-  // async getActivity(): Promise<string> {
-  //   // Vacation scheduling is weird, and changes infrequently. Just get it from status.
-  //   if (await this.system.status.getZoneActivity(this.context.zone) === ACTIVITY.VACATION) {
-  //     return ACTIVITY.VACATION;
-  //   }
-  //   // Config has more up to date activity settings.
-  //   return await this.system.config.getZoneActivity(this.context.zone);
-  // }
 
   async getHoldTime(): Promise<string> {
     // OTMR setting to say when manual hold should end

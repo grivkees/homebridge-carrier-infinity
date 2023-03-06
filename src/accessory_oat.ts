@@ -8,7 +8,7 @@ class OATSensorTemp extends CharacteristicWrapper {
   ctype = this.Characteristic.CurrentTemperature;
   value = this.system.status.outdoor_temp.pipe(
     // The oat from the api is always in F (#97)
-    map(x => convertSystemTemp2CharTemp(x, 'F')),
+    map(data => convertSystemTemp2CharTemp(data, 'F')),
   );
 }
 
