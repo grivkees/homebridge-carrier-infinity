@@ -399,8 +399,8 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
       filter((new_clean_data) => dirty_hash === this.hash(new_clean_data)),
       take(1),
     ).subscribe({
-      next: () => {
-        this.log.info('Successful propagation to carrier api is confirmed.');
+      next: (data) => {
+        this.log.info(`Successful propagation to carrier api is confirmed for ${this.hash(data)}`);
         this.events.emit('onGet'); // TODO: pick different event
       },
       // As a fail-safe, revert to clean config if update failed
