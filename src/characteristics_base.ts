@@ -1,4 +1,3 @@
-import { ACTIVITY } from './api/constants';
 import { SystemModel } from './api/models';
 import { Service, Characteristic, Logger } from 'homebridge';
 import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
@@ -58,7 +57,7 @@ export abstract class CharacteristicWrapper extends Wrapper {
     // Push updates from the system-based value observable to HK
     this.value.subscribe(
       async data => {
-        if (characteristic.value == data) {
+        if (characteristic.value === data) {
           this.log.warn(`BADPUSH Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
         } else {
           this.log.warn(`PUSH Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
@@ -73,7 +72,7 @@ export abstract class CharacteristicWrapper extends Wrapper {
       this.system.config.events.emit('onGet');
       // ... and return immediately the last seen api value.
       const data = await firstValueFrom(this.value);
-      if (characteristic.value != data) {
+      if (characteristic.value !== data) {
         this.log.warn(`GET Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
       }
       return data;

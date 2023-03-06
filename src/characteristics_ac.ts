@@ -78,7 +78,7 @@ class CurrentTemp extends ThermostatCharacteristicWrapper {
   ctype = this.Characteristic.CurrentTemperature;
   value = this.system.status.getZone(this.context.zone).temp.pipe(map(
     ([temp, temp_unit]) => {
-      this.log.warn(`glenlog: temp changed to ${temp}`); // TODO: REMOVE ME
+      this.log.warn(`Temp changed to ${temp}`); // TODO: REMOVE ME
       return convertSystemTemp2CharTemp(temp, temp_unit);
     },
   ));
