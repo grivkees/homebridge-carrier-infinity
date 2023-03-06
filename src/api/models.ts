@@ -37,6 +37,7 @@ import {
 } from 'rxjs';
 import EventEmitter from 'events';
 import { findZoneByID, getZoneActivityConfig } from './helpers';
+import { distinctUntilChangedWithEpsilon } from './helpers_rxjs';
 
 // TODO: change public to read only
 // TODO: make F to C rounding consistent for value deduping
@@ -70,6 +71,7 @@ abstract class BaseModel<T extends object> {
       interval(5 * 60 * 1000),
       // On Demand Fetch
       fromEvent(this.events, 'onGet'),
+      fromEvent(this.events, 'post_push_refresh'),
     // Throttle to ignore events in quick succession
     ).pipe(throttleTime(10000));
     // Use these 'ticks' triggers to update the data.
@@ -120,7 +122,6 @@ abstract class BaseModel<T extends object> {
     await this.infinity_client.activate();
     const response = await this.infinity_client.axios.get(this.getPath());
     if (response.data) {
-      // this.log.error(`glenlog fetch: ${response.data}`);
       return await xml2js.parseStringPromise(response.data);
     } else {
       this.log.debug(response.data);
@@ -147,6 +148,7 @@ export class LocationsModel extends BaseModel<Location> {
 }
 
 abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
+  // TODO: these 'last' values are problematic, since they can be race-y.
   protected last_fetched_ts = 0;
   protected last_fetched_hash = '';
   protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime', 'previousMode']);
@@ -163,7 +165,6 @@ abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
     const data_object = await super.forceFetch();
     const top_level_key = Object.keys(data_object)[0];
     const ts = data_object[top_level_key].timestamp[0];
-    // TODO there is something problematic about using these
     this.last_fetched_ts = Date.parse(ts);
     this.last_fetched_hash = this.hash(data_object);
     this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_fetched_ts})`);
@@ -217,7 +218,6 @@ export class SystemStatusModel extends BaseSystemModel<Status> {
   private raw_zone_data$ = this.data$.pipe(map(data => data.status.zones[0].zone), distinctUntilChanged());
 
   public getZone(zone: string): SystemStatusZoneModel {
-    // TODO assert valid zone
     // TODO save SystemStatusZoneModel to dedup
     return new SystemStatusZoneModel(this.raw_zone_data$.pipe(map(
       data => findZoneByID(data, zone),
@@ -271,20 +271,19 @@ export class SystemStatusZoneModel {
   public temp = combineLatest([this.zone, this.temp_units$]).pipe(
     debounceTime(50),
     map(([zone, temp_units]) => [Number(zone.rt[0]), temp_units] as TempWithUnit),
-    distinctUntilChanged(),
-    // TODO: this maybe is bouncing because of floating point differences?
+    distinctUntilChangedWithEpsilon(),
   );
 
   public cool_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(
     debounceTime(50),
     map(([zone, temp_units]) => [Number(zone.clsp[0]), temp_units] as TempWithUnit),
-    distinctUntilChanged(),
+    distinctUntilChangedWithEpsilon(),
   );
 
   public heat_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(
     debounceTime(50),
     map(([zone, temp_units]) => [Number(zone.htsp[0]), temp_units] as TempWithUnit),
-    distinctUntilChanged(),
+    distinctUntilChangedWithEpsilon(),
   );
 
   public humidity = this.zone.pipe(map(zone => Number(zone.rh[0])), distinctUntilChanged());
@@ -323,10 +322,9 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
       debounceTime(3 * 1000),
     ).subscribe(async data => this.push(data));
 
-    // ATTEMPT TO GET DIRTY AND CLEAN TODO REMOVE ME
-    this.clean_data$.subscribe(() => this.log.error('glenlog: new clean'));
-    this.dirty_data$.subscribe(() => this.log.error('glenlog: new dirty'));
-    this.data$.subscribe(() => this.log.error('glenlog: new combined'));
+    this.clean_data$.subscribe(() => this.log.debug('New config data observed from api'));
+    this.dirty_data$.subscribe(() => this.log.debug('New config data observed from local'));
+    this.data$.subscribe(() => this.log.debug('Propagating new config data to HK...'));
   }
 
   getPath(): string {
@@ -341,9 +339,8 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   ]), distinctUntilChanged());
 
   private raw_zone_data$ = this.data$.pipe(map(data => data.config.zones[0].zone), distinctUntilChanged());
-  // TODO: make this zone filter common between here, status, and setters below
+
   public getZone(zone: string): SystemConfigZoneModel {
-    // TODO assert valid zone
     // TODO save SystemConfigZoneModel to dedup
     return new SystemConfigZoneModel(this.raw_zone_data$.pipe(map(
       data => findZoneByID(data, zone),
@@ -358,8 +355,6 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     // Pause clean data use until we see an update from after now.
     const now = new Date();
     this.last_pushed_ts = now.valueOf();
-    // TODO this doesnt seem to actually change the first fetched clean response
-    data.config.timestamp[0] = now.toISOString();
 
     // If nothing actually changed, no need to push.
     const dirty_hash = this.hash(data);
@@ -373,7 +368,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     // Make sure the config base revision is not outdated
     // TODO explicitly track and check base rev of dirty
     // TODO use old config directly, instead of these vars?
-    // TODO make this just check that fields we dont play with havent changed
+    // TODO make this just check that fields we dont play with haven't changed
     // aka hash not changed minus things we modify
     const prev_last_fetched_hash = this.last_fetched_hash;
     const prev_last_fetched_ts = this.last_fetched_ts;
@@ -401,18 +396,18 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     ).subscribe({
       next: (data) => {
         this.log.info(`Successful propagation to carrier api is confirmed for ${this.hash(data)}`);
-        this.events.emit('onGet'); // TODO: pick different event
+        this.events.emit('post_push_refresh');
       },
       // As a fail-safe, revert to clean config if update failed
       error: () => {
         this.log.error('Changes do not (yet?) appear to have propagated to the carrier api.');
         this.last_pushed_ts = 0; // revert to clean config
-        this.events.emit('onGet'); // TODO: pick different event
+        this.events.emit('post_push_refresh');
       },
     });
 
     // Poll for updates for the verification above
-    this.events.emit('onGet');
+    this.events.emit('post_push_refresh');
   }
 
   private async forcePush(data: Config): Promise<void> {
@@ -420,7 +415,6 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
     const builder = new xml2js.Builder();
     const new_xml = builder.buildObject(data);
-    // this.log.error(`glenlog push: ${new_xml.replace(/(\r\n|\n)/g, '')}`);
     const post_data = `data=${encodeURIComponent(new_xml)}`;
     await this.infinity_client.axios.post(
       this.getPath(),
@@ -440,8 +434,6 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
   async setMode(mode: string): Promise<void> {
     this.log.debug('Setting mode to ' + mode);
     const data = await firstValueFrom(this.data$);
-    // TODO does the first fetched clean actually show this?
-    // data.config.previousMode[0] = data.config.mode[0];
     data.config.mode[0] = mode;
     this.dirty_data$.next(data);
   }
@@ -518,6 +510,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
       htsp || parseFloat(manual_activity_obj['htsp'][0]),
       clsp || parseFloat(manual_activity_obj['clsp'][0]),
       data.config.cfgem[0],
+      // TODO: rethink setpoint deadband
       // when setpoints are too close, make clsp sticky when no change made to htsp
       htsp === null,
     );
@@ -622,13 +615,13 @@ export class SystemConfigZoneModel {
   public cool_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(
     debounceTime(50),
     map(([activity, temp_units]) => [Number(activity.clsp[0]), temp_units] as TempWithUnit),
-    distinctUntilChanged(),
+    distinctUntilChangedWithEpsilon(),
   );
 
   public heat_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(
     debounceTime(50),
     map(([activity, temp_units]) => [Number(activity.htsp[0]), temp_units] as TempWithUnit),
-    distinctUntilChanged(),
+    distinctUntilChangedWithEpsilon(),
   );
 }
 

@@ -68,7 +68,7 @@ export class ThermostatAccessory extends BaseAccessory {
     this.fan_service = this.fan_service || this.accessory.addService(this.platform.Service.Fanv2);
     this.fan_service.setCharacteristic(
       this.platform.Characteristic.Name,
-      this.context.name.replace('Thermostat', 'Fan'), // TODO: this is a hack
+      `${this.context.zone_name} Fan`,
     );
 
     new FanService(

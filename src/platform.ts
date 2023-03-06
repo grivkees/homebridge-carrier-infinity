@@ -92,6 +92,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
           {
             ...context_zone,
             name: `${zone_name} Thermostat`,
+            zone_name: zone_name,
             holdBehavior: this.config['holdBehavior'],
             holdArgument: this.config['holdArgument'],
           },

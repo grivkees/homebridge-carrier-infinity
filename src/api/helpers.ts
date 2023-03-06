@@ -2,11 +2,18 @@ import { ACTIVITY } from './constants';
 import Config, {Zone as CZone, Activity3 as CActivity} from './interface_config';
 import {Zone as SZone} from './interface_status';
 
+function findByID<T extends CZone | SZone | CActivity>(data: T[], id: string): T {
+  const zone_obj = data.find(
+    (z) => z['$'].id === id,
+  );
+  if (zone_obj === undefined) {
+    throw new RangeError(`Item with id='${id}' not found in list.`);
+  }
+  return zone_obj;
+}
+
 export function findZoneByID<T extends CZone | SZone>(data: T[], zone: string | number): T {
-  // TODO: remove ! and add an error if zone out of bounds
-  return data.find(
-    (z) => z['$'].id === zone.toString(),
-  )!;
+  return findByID(data, zone.toString());
 }
 
 export function getZoneActivityConfig(data: Config, zone: string, activity_name: string): CActivity {
@@ -22,9 +29,5 @@ export function getZoneActivityConfig(data: Config, zone: string, activity_name:
   }
 
   const zone_obj = findZoneByID(data.config.zones[0].zone, zone);
-  const activities_obj = zone_obj.activities[0];
-  // TODO add assert valid zone name to remove !
-  return activities_obj['activity'].find(
-    (activity: CActivity) => activity['$'].id === activity_name,
-  )!;
+  return findByID(zone_obj.activities[0].activity, activity_name);
 }
