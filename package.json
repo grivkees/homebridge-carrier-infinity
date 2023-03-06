@@ -89,6 +89,10 @@
       {
         "name": "master",
         "channel": "next"
+      },
+      {
+        "name": "beta",
+        "prerelease": true
       }
     ],
     "plugins": [
