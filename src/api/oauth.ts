@@ -47,7 +47,7 @@ export class OAuthHeaders {
     if (config.headers === undefined) {
       config.headers = {};
     }
-    config.headers.Authorization = this.genHeader(config.method || 'GET', config.url || '/', username, token, config.data);
+    config.headers['Authorization'] = this.genHeader(config.method || 'GET', config.url || '/', username, token, config.data);
     return config;
   }
 }
