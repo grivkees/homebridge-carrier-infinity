@@ -34,6 +34,7 @@ import {
   takeUntil,
   throttleTime,
   timeout,
+  withLatestFrom,
 } from 'rxjs';
 import EventEmitter from 'events';
 import { findZoneByID, getZoneActivityConfig } from './helpers';
@@ -148,9 +149,6 @@ export class LocationsModel extends BaseModel<Location> {
 }
 
 abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
-  // TODO: these 'last' values are problematic, since they can be race-y.
-  protected last_fetched_ts = 0;
-  protected last_fetched_hash = '';
   protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime', 'previousMode']);
 
   constructor(
@@ -165,10 +163,10 @@ abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
     const data_object = await super.forceFetch();
     const top_level_key = Object.keys(data_object)[0];
     const ts = data_object[top_level_key].timestamp[0];
-    this.last_fetched_ts = Date.parse(ts);
-    this.last_fetched_hash = this.hash(data_object);
-    this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_fetched_ts})`);
-    this.log.debug(`HASH ${this.getPath()} hashes to (${this.last_fetched_hash})`);
+    const fetched_ts = Date.parse(ts);
+    const fetched_hash = this.hash(data_object);
+    this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${fetched_ts})`);
+    this.log.debug(`HASH ${this.getPath()} hashes to (${fetched_hash})`);
     return data_object;
   }
 }
@@ -320,7 +318,9 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     this.dirty_data$.pipe(
       // Wait x seconds after last change before sending.
       debounceTime(3 * 1000),
-    ).subscribe(async data => this.push(data));
+      // Include the latest 'clean' data, since it is needed to know if push is safe
+      withLatestFrom(this.clean_data$),
+    ).subscribe(async ([dirty_data, clean_data]) => this.push(dirty_data, clean_data));
 
     this.clean_data$.subscribe(() => this.log.debug('New config data observed from api'));
     this.dirty_data$.subscribe(() => this.log.debug('New config data observed from local'));
@@ -349,33 +349,35 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
 
   /* Write APIs */
 
-  private async push(data: Config): Promise<void> {
+  private async push(new_data: Config, old_data: Config): Promise<void> {
     this.log.info('Start pushing changes to carrier api...');
 
     // Pause clean data use until we see an update from after now.
     const now = new Date();
     this.last_pushed_ts = now.valueOf();
 
+    // We will compare new 'dirty' data to old 'clean' data to make sure push is safe
+    const prev_clean_hash = this.hash(old_data);
+    const prev_clean_ts = Date.parse(old_data.config.timestamp[0]);
+
     // If nothing actually changed, no need to push.
-    const dirty_hash = this.hash(data);
-    // TODO add back in this check
-    // if (this.last_fetched_hash === dirty_hash) {
-    //   this.log.warn(`Config (hash=${dirty_hash}) doesn't appear to have changed. No changes sent.`);
-    //   this.last_pushed_ts = 0;  // revert to clean config
-    //   return;
-    // }
+    const dirty_hash = this.hash(new_data);
+    if (prev_clean_hash === dirty_hash) {
+      this.log.warn(`Config (hash=${dirty_hash}) doesn't appear to have changed. No changes sent.`);
+      this.last_pushed_ts = 0;  // revert to clean config
+      return;
+    }
 
     // Make sure the config base revision is not outdated
-    // TODO explicitly track and check base rev of dirty
-    // TODO use old config directly, instead of these vars?
+    // TODO explicitly track and check base rev of dirty, maybe use ts for this?
     // TODO make this just check that fields we dont play with haven't changed
     // aka hash not changed minus things we modify
-    const prev_last_fetched_hash = this.last_fetched_hash;
-    const prev_last_fetched_ts = this.last_fetched_ts;
     const new_clean_data = await this.forceFetch();
+    const new_clean_hash = this.hash(new_clean_data);
+    const new_clean_ts = Date.parse(new_clean_data.config.timestamp[0]);
     if (
-      this.last_fetched_hash !== prev_last_fetched_hash ||
-      this.last_fetched_ts !== prev_last_fetched_ts
+      new_clean_hash !== prev_clean_hash ||
+      new_clean_ts !== prev_clean_ts
     ) {
       this.log.error('Aborting Push: API shows a newer, modified config.');
       this.last_pushed_ts = 0;  // revert to clean config
@@ -384,7 +386,7 @@ export class SystemConfigModel extends BaseSystemModel<Config> {
     }
 
     // Send the update
-    await this.forcePush(data);
+    await this.forcePush(new_data);
 
     // Wait for a bit, and confirm if we see the api update on the server
     this.clean_data$.pipe(
