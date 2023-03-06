@@ -2,15 +2,14 @@ import { CarrierInfinityHomebridgePlatform } from './platform';
 import { AccessoryInformation, CharacteristicWrapper, MultiWrapper } from './characteristics_base';
 import { convertSystemTemp2CharTemp } from './helpers';
 import { BaseAccessory } from './accessory_base';
+import { map } from 'rxjs';
 
 class OATSensorTemp extends CharacteristicWrapper {
   ctype = this.Characteristic.CurrentTemperature;
-  get = async () => {
-    return convertSystemTemp2CharTemp(
-      await this.system.status.getOutdoorTemp(),
-      'F', // The oat from the api is always in F (#97)
-    );
-  };
+  value = this.system.status.outdoor_temp.pipe(
+    // The oat from the api is always in F (#97)
+    map(x => convertSystemTemp2CharTemp(x, 'F')),
+  );
 }
 
 export class OutdoorTempSensorService extends MultiWrapper {

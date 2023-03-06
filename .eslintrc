@@ -33,6 +33,7 @@
           "ctype",
           "damperposition",
           "deadband",
+          "debounce",
           "Fanv",
           "filtrlvl",
           "featureset",

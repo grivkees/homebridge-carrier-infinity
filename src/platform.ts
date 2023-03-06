@@ -11,6 +11,7 @@ import { EnvSensorAccessory } from './accessory_envsensor';
 import { BaseAccessory } from './accessory_base';
 import { ComfortActivityAccessory } from './accessory_comfort_activity';
 import { InfinityRestClient } from './api/rest_client';
+import { firstValueFrom } from 'rxjs';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -42,6 +43,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     this.api.on('didFinishLaunching', () => {
       this.discoverSystems().then().catch(error => {
         this.log.error('Could not discover devices: ' + error.message);
+        this.log.debug(error);
       });
     });
 
@@ -59,10 +61,12 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   }
 
   async discoverSystems(): Promise<void> {
-    const systems = await new LocationsModel(this.infinity_client).getSystems();
+    const locations = await new LocationsModel(this.infinity_client);
+    const systems = await firstValueFrom(locations.system_serials);
     for (const serialNumber of systems) {
       // Create system api object, and save for later reference
-      const system = new SystemModel(this.infinity_client, serialNumber);
+      const system = await new SystemModel(this.infinity_client, serialNumber);
+      // TODO make sure we can fetch all api calls, and timeout if not.
       this.systems[serialNumber] = system;
 
       // Add system based accessories
@@ -77,8 +81,9 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       }
 
       // Add system+zone based accessories
-      const zones = await system.profile.getZones();
+      const zones = await firstValueFrom(system.profile.zone_ids);
       for (const zone of zones) {  // 'of' makes sure we go through zone ids, not index
+        const zone_name = await firstValueFrom(system.config.getZone(zone).name);
         const context_zone = {...context_system, zone: zone};
         system.log.debug(`Discovered zone ${context_zone.zone}`);
         // -> Zone Accessory: Thermostat
@@ -86,7 +91,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
           this,
           {
             ...context_zone,
-            name: `${await system.config.getZoneName(zone)} Thermostat`,
+            name: `${zone_name} Thermostat`,
             holdBehavior: this.config['holdBehavior'],
             holdArgument: this.config['holdArgument'],
           },
@@ -97,7 +102,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
             this,
             {
               ...context_zone,
-              name: `${await system.config.getZoneName(zone)} Environmental Sensor`,
+              name: `${zone_name} Environmental Sensor`,
             },
           );
         }
@@ -107,7 +112,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
             this,
             {
               ...context_zone,
-              name: `${await system.config.getZoneName(zone)} Comfort Activity`,
+              name: `${zone_name} Comfort Activity`,
               holdBehavior: this.config['holdBehavior'],
               holdArgument: this.config['holdArgument'],
             },

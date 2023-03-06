@@ -13,59 +13,115 @@ import Location from './interface_locations';
 import Profile from './interface_profile';
 import Status, {Zone as SZone} from './interface_status';
 import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
+import {
+  combineLatest,
+  debounceTime,
+  distinctUntilChanged,
+  filter,
+  firstValueFrom,
+  fromEvent,
+  interval,
+  lastValueFrom,
+  map,
+  merge,
+  Observable,
+  of,
+  ReplaySubject,
+  Subject,
+  Subscription,
+  switchMap,
+  take,
+  takeUntil,
+  throttleTime,
+  timeout,
+} from 'rxjs';
+import EventEmitter from 'events';
+import { findZoneByID, getZoneActivityConfig } from './helpers';
 
-abstract class BaseModel {
-  protected data_object!: object;
-  protected data_object_hash?: string;
+// TODO: change public to read only
+// TODO: make F to C rounding consistent for value deduping
+// TODO: add backoff on api errors
+// TODO: make getPath a var not method
+
+export type TempWithUnit = [number, string];
+
+abstract class BaseModel<T extends object> {
+  // Raw clean api data for use inside class and in children.
+  protected clean_data$ = new ReplaySubject<T>(1);
+  // Protected form for use outside the class
+  public data$ = this.clean_data$.asObservable();
+
   protected HASH_IGNORE_KEYS = new Set<string>();
   protected write_lock: Mutex;
   protected log: Logger = new PrefixLogger(this.infinity_client.log, 'API');
+
+  public events = new EventEmitter();
 
   constructor(
     protected readonly infinity_client: InfinityRestClient,
   ) {
     this.write_lock = new Mutex();
+
+    // Set up the triggers for updating our api data
+    const ticks = merge(
+      // Immediate Fetch
+      of(1),
+      // Periodic Fetch
+      interval(5 * 60 * 1000),
+      // On Demand Fetch
+      fromEvent(this.events, 'onGet'),
+    // Throttle to ignore events in quick succession
+    ).pipe(throttleTime(10000));
+    // Use these 'ticks' triggers to update the data.
+    ticks.pipe(
+      switchMap(
+        () => this.fetchObservable(),
+      ),
+      distinctUntilChanged((prev, cur) => this.isUnchanged(prev, cur)),
+    // Send data to the BehaviorSubject/Observable.
+    ).subscribe(this.clean_data$);
   }
 
   abstract getPath(): string;
 
-  protected hashDataObject(): string {
+  protected isUnchanged(x: T, y: T): boolean {
+    return this.hash(x) === this.hash(y);
+  }
+
+  protected hash(data: T): string {
     return hash(
-      this.data_object,
+      data,
       {excludeKeys: (key) => {
         return this.HASH_IGNORE_KEYS.has(key);
       }},
     );
   }
 
-  @MemoizeExpiring(10 * 1000)
-  async fetch(): Promise<void> {
-    // If push is ongoing, skip this update fetch. The push will do a fetch.
-    try {
-      await tryAcquire(this.write_lock).runExclusive(async () => {
-        await this.forceFetch();
-      });
-    } catch (e) {
-      if (e === E_ALREADY_LOCKED) {
-        return;
-      } else if (e === E_TIMEOUT || e === E_CANCELED) {
-        this.log.error(`Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
-      } else {
-        this.log.error(
-          'Failed to fetch updates: ',
-          Axios.isAxiosError(e) ? e.message : e,
-        );
-      }
-    }
+  protected fetchObservable(): Observable<T> {
+    return new Observable((observer) => {
+      this.forceFetch()
+        .then((data) => {
+          observer.next(data);
+          observer.complete();
+        })
+        // An observable can never return an error, or it completes.
+        // Log errors, swallow them, and send no new value.
+        .catch((error) => {
+          this.log.error(
+            'Failed to fetch updates: ', Axios.isAxiosError(error) ? error.message : error,
+          );
+          observer.complete();
+        });
+    });
   }
 
-  protected async forceFetch(): Promise<void> {
+  protected async forceFetch(): Promise<T> {
     await this.infinity_client.refreshToken();
     await this.infinity_client.activate();
     const response = await this.infinity_client.axios.get(this.getPath());
     if (response.data) {
-      this.data_object = await xml2js.parseStringPromise(response.data) as object;
-      this.data_object_hash = this.hashDataObject();
+      // this.log.error(`glenlog fetch: ${response.data}`);
+      return await xml2js.parseStringPromise(response.data);
     } else {
       this.log.debug(response.data);
       throw new Error('Response from API contained errors.');
@@ -73,29 +129,27 @@ abstract class BaseModel {
   }
 }
 
-export class LocationsModel extends BaseModel {
-  protected data_object!: Location;
-
+export class LocationsModel extends BaseModel<Location> {
   getPath(): string {
     return `/users/${this.infinity_client.username}/locations`;
   }
 
-  async getSystems(): Promise<string[]> {
-    await this.fetch();
+  public system_serials = this.data$.pipe(map(data => {
     const systems: string[] = [];
-    for (const location of this.data_object.locations.location) {
+    for (const location of data.locations.location) {
       for (const system of location.systems[0].system || []) {
         const link_parts = system['atom:link'][0]['$']['href'].split('/');
         systems.push(link_parts[link_parts.length - 1]);
       }
     }
     return systems;
-  }
+  }), distinctUntilChanged());
 }
 
-abstract class BaseSystemModel extends BaseModel {
-  private last_updated = 0;  // TODO use this
-  protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime']);
+abstract class BaseSystemModel<T extends object> extends BaseModel<T> {
+  protected last_fetched_ts = 0;
+  protected last_fetched_hash = '';
+  protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime', 'previousMode']);
 
   constructor(
     protected readonly infinity_client: InfinityRestClient,
@@ -105,77 +159,49 @@ abstract class BaseSystemModel extends BaseModel {
     super(infinity_client);
   }
 
-  protected async forceFetch(): Promise<void> {
-    await super.forceFetch();
-    const top_level_key = Object.keys(this.data_object)[0];
-    const ts = this.data_object[top_level_key].timestamp[0];
-    this.last_updated = Date.parse(ts);
-    this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_updated})`);
+  protected async forceFetch(): Promise<T> {
+    const data_object = await super.forceFetch();
+    const top_level_key = Object.keys(data_object)[0];
+    const ts = data_object[top_level_key].timestamp[0];
+    // TODO there is something problematic about using these
+    this.last_fetched_ts = Date.parse(ts);
+    this.last_fetched_hash = this.hash(data_object);
+    this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_fetched_ts})`);
+    this.log.debug(`HASH ${this.getPath()} hashes to (${this.last_fetched_hash})`);
+    return data_object;
   }
 }
 
-export class SystemProfileModel extends BaseSystemModel {
-  protected data_object!: Profile;
-
+export class SystemProfileModel extends BaseSystemModel<Profile> {
   getPath(): string {
     return `/systems/${this.serialNumber}/profile`;
   }
 
-  async getName(): Promise<string> {
-    await this.fetch();
-    return this.data_object.system_profile.name[0];
-  }
+  public name = this.data$.pipe(map(data => data.system_profile.name[0]), distinctUntilChanged());
+  public brand = this.data$.pipe(map(data => data.system_profile.brand[0]), distinctUntilChanged());
+  public model = this.data$.pipe(map(data => data.system_profile.model[0]), distinctUntilChanged());
+  public firmware = this.data$.pipe(map(data => data.system_profile.firmware[0]), distinctUntilChanged());
 
-  async getBrand(): Promise<string> {
-    await this.fetch();
-    return this.data_object.system_profile.brand[0];
-  }
-
-  async getModel(): Promise<string> {
-    await this.fetch();
-    return this.data_object.system_profile.model[0];
-  }
-
-  async getFirmware(): Promise<string> {
-    await this.fetch();
-    return this.data_object.system_profile.firmware[0];
-  }
-
-  async getZones(): Promise<Array<string>> {
-    await this.fetch();
-    return this.data_object.system_profile.zones[0].zone.filter(
+  public zone_ids = this.data$.pipe(map(data => {
+    return data.system_profile.zones[0].zone.filter(
       (zone: { present: string[] }) => zone['present'][0] === STATUS.ON,
     ).map(
       (zone) => zone['$'].id,
     );
-  }
+  }), distinctUntilChanged());
 }
 
-export class SystemStatusModel extends BaseSystemModel {
-  protected data_object!: Status;
-
+export class SystemStatusModel extends BaseSystemModel<Status> {
   getPath(): string {
     return `/systems/${this.serialNumber}/status`;
   }
 
-  async getUnits(): Promise<string> {
-    await this.fetch();
-    return this.data_object.status.cfgem[0];
-  }
+  public outdoor_temp = this.data$.pipe(map(data => Number(data.status.oat[0])), distinctUntilChanged());
+  public filter_used = this.data$.pipe(map(data => Number(data.status.filtrlvl[0])), distinctUntilChanged());
+  public temp_units = this.data$.pipe(map(data => data.status.cfgem[0]), distinctUntilChanged());
 
-  async getOutdoorTemp(): Promise<number> {
-    await this.fetch();
-    return Number(this.data_object.status.oat[0]);
-  }
-
-  async getFilterUsed(): Promise<number> {
-    await this.fetch();
-    return Number(this.data_object.status.filtrlvl[0]);
-  }
-
-  async getMode(): Promise<string> {
-    await this.fetch();
-    const raw_mode = this.data_object.status.mode[0];
+  public mode = this.data$.pipe(map(data => {
+    const raw_mode = data.status.mode[0];
     switch(raw_mode) {
       case 'gasheat':
       case 'electric':
@@ -186,17 +212,27 @@ export class SystemStatusModel extends BaseSystemModel {
       default:
         return raw_mode;
     }
-  }
+  }), distinctUntilChanged());
 
-  private async getZone(zone: string): Promise<SZone> {
-    await this.fetch();
-    return this.data_object.status.zones[0].zone.find(
-      (z) => z['$'].id === zone.toString(),
-    )!;
-  }
+  private raw_zone_data$ = this.data$.pipe(map(data => data.status.zones[0].zone), distinctUntilChanged());
 
-  async getZoneConditioning(zone: string): Promise<string> {
-    const raw_mode = (await this.getZone(zone)).zoneconditioning![0];
+  public getZone(zone: string): SystemStatusZoneModel {
+    // TODO assert valid zone
+    // TODO save SystemStatusZoneModel to dedup
+    return new SystemStatusZoneModel(this.raw_zone_data$.pipe(map(
+      data => findZoneByID(data, zone),
+    )), this.temp_units);
+  }
+}
+
+export class SystemStatusZoneModel {
+  constructor(private zone: Observable<SZone>, private temp_units$: Observable<string>) {}
+
+  public mode = this.zone.pipe(map(zone => {
+    if (zone.damperposition[0] === '0') {
+      return SYSTEM_MODE.OFF;
+    }
+    const raw_mode = zone.zoneconditioning[0];
     switch(raw_mode) {
       case 'active_heat':
       case 'prep_heat':
@@ -211,89 +247,316 @@ export class SystemStatusModel extends BaseSystemModel {
       default:
         return raw_mode;
     }
-  }
+  }), distinctUntilChanged());
 
-  async getZoneFan(zone: string): Promise<string> {
-    const zone_obj = await this.getZone(zone);
-    if (zone_obj.damperposition![0] === '0') {
+  public fan = this.zone.pipe(map(zone => {
+    if (zone.damperposition[0] === '0') {
       return FAN_MODE.OFF;
     } else {
-      return zone_obj.fan[0];
+      return zone.fan[0];
     }
-  }
+  }), distinctUntilChanged());
 
-  async getZoneOpen(zone: string): Promise<boolean> {
-    return (await this.getZone(zone)).damperposition![0] !== '0';
-  }
+  public activity = this.zone.pipe(map(zone => zone.currentActivity[0]), distinctUntilChanged());
+  // The zone is blowing if the mode is on or the fan is on
+  public blowing = combineLatest([this.mode, this.fan]).pipe(
+    debounceTime(50),
+    map(([mode, fan]) => mode !== SYSTEM_MODE.OFF || fan !== FAN_MODE.OFF),
+    distinctUntilChanged(),
+  );
 
-  async getZoneTemp(zone: string): Promise<number> {
-    return Number((await this.getZone(zone)).rt[0]);
-  }
+  // This helps with some edge cases around zoned systems
+  public closed = this.zone.pipe(map(zone => zone.damperposition[0] === '0'), distinctUntilChanged());
 
-  async getZoneHumidity(zone: string): Promise<number> {
-    return Number((await this.getZone(zone)).rh[0]);
-  }
+  public temp = combineLatest([this.zone, this.temp_units$]).pipe(
+    debounceTime(50),
+    map(([zone, temp_units]) => [Number(zone.rt[0]), temp_units] as TempWithUnit),
+    distinctUntilChanged(),
+    // TODO: this maybe is bouncing because of floating point differences?
+  );
 
-  async getZoneActivity(zone: string): Promise<string> {
-    return (await this.getZone(zone)).currentActivity![0];
-  }
+  public cool_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(
+    debounceTime(50),
+    map(([zone, temp_units]) => [Number(zone.clsp[0]), temp_units] as TempWithUnit),
+    distinctUntilChanged(),
+  );
 
-  async getZoneCoolSetpoint(zone: string): Promise<number> {
-    return Number((await this.getZone(zone)).clsp[0]);
-  }
+  public heat_setpoint = combineLatest([this.zone, this.temp_units$]).pipe(
+    debounceTime(50),
+    map(([zone, temp_units]) => [Number(zone.htsp[0]), temp_units] as TempWithUnit),
+    distinctUntilChanged(),
+  );
 
-  async getZoneHeatSetpoint(zone: string): Promise<number> {
-    return Number((await this.getZone(zone)).htsp[0]);
-  }
+  public humidity = this.zone.pipe(map(zone => Number(zone.rh[0])), distinctUntilChanged());
 }
 
-export class SystemConfigModel extends BaseSystemModel {
-  protected data_object!: Config;
+export class SystemConfigModel extends BaseSystemModel<Config> {
+  // This will always hold the 'dirty' version of the config. This is what is
+  // changed by set methods.
+  private dirty_data$ = new ReplaySubject<Config>(1);
+
+  // This combines the clean and dirty data and is what is used by api observers.
+  public data$ = merge(
+    this.clean_data$.pipe(
+      // When a push is active, do not pass clean data unless it is from after
+      // the push.
+      // TODO add an OR to allow if the clean data matches the last dirty
+      filter((data) => Date.parse(data.config.timestamp[0]) >= this.last_pushed_ts),
+    ),
+    this.dirty_data$,
+  );
+
+  // Indicates the local data$ has been modified, and clean_data$ should only be
+  // used after if it is from after this time.
+  private last_pushed_ts = 0;
+
+  constructor(
+    protected readonly infinity_client: InfinityRestClient,
+    public readonly serialNumber: string,
+    protected readonly log: Logger,
+  ) {
+    super(infinity_client, serialNumber, log);
+
+    // Send changes from the dirty Subject back to the carrier api.
+    this.dirty_data$.pipe(
+      // Wait x seconds after last change before sending.
+      debounceTime(3 * 1000),
+    ).subscribe(async data => this.push(data));
+
+    // ATTEMPT TO GET DIRTY AND CLEAN TODO REMOVE ME
+    this.clean_data$.subscribe(() => this.log.error('glenlog: new clean'));
+    this.dirty_data$.subscribe(() => this.log.error('glenlog: new dirty'));
+    this.data$.subscribe(() => this.log.error('glenlog: new combined'));
+  }
 
   getPath(): string {
     return `/systems/${this.serialNumber}/config`;
   }
 
-  async getUnits(): Promise<string> {
-    await this.fetch();
-    return this.data_object.config.cfgem[0];
+  public mode = this.data$.pipe(map(data => data.config.mode[0]), distinctUntilChanged());
+  public temp_units = this.data$.pipe(map(data => data.config.cfgem[0]), distinctUntilChanged());
+  public temp_bounds = this.data$.pipe(map(data => [
+    [Number(data.config.utilityEvent[0].minLimit[0]), data.config.cfgem[0]] as TempWithUnit,
+    [Number(data.config.utilityEvent[0].maxLimit[0]), data.config.cfgem[0]] as TempWithUnit,
+  ]), distinctUntilChanged());
+
+  private raw_zone_data$ = this.data$.pipe(map(data => data.config.zones[0].zone), distinctUntilChanged());
+  // TODO: make this zone filter common between here, status, and setters below
+  public getZone(zone: string): SystemConfigZoneModel {
+    // TODO assert valid zone
+    // TODO save SystemConfigZoneModel to dedup
+    return new SystemConfigZoneModel(this.raw_zone_data$.pipe(map(
+      data => findZoneByID(data, zone),
+    )), this.temp_units);
   }
 
-  async getTempBounds(): Promise<[number, number]> {
-    await this.fetch();
-    const utility_events = this.data_object.config.utilityEvent[0];
-    return [Number(utility_events.minLimit[0]), Number(utility_events.maxLimit[0])];
+  /* Write APIs */
+
+  private async push(data: Config): Promise<void> {
+    this.log.info('Start pushing changes to carrier api...');
+
+    // Pause clean data use until we see an update from after now.
+    const now = new Date();
+    this.last_pushed_ts = now.valueOf();
+    // TODO this doesnt seem to actually change the first fetched clean response
+    data.config.timestamp[0] = now.toISOString();
+
+    // If nothing actually changed, no need to push.
+    const dirty_hash = this.hash(data);
+    // TODO add back in this check
+    // if (this.last_fetched_hash === dirty_hash) {
+    //   this.log.warn(`Config (hash=${dirty_hash}) doesn't appear to have changed. No changes sent.`);
+    //   this.last_pushed_ts = 0;  // revert to clean config
+    //   return;
+    // }
+
+    // Make sure the config base revision is not outdated
+    // TODO explicitly track and check base rev of dirty
+    // TODO use old config directly, instead of these vars?
+    // TODO make this just check that fields we dont play with havent changed
+    // aka hash not changed minus things we modify
+    const prev_last_fetched_hash = this.last_fetched_hash;
+    const prev_last_fetched_ts = this.last_fetched_ts;
+    const new_clean_data = await this.forceFetch();
+    if (
+      this.last_fetched_hash !== prev_last_fetched_hash ||
+      this.last_fetched_ts !== prev_last_fetched_ts
+    ) {
+      this.log.error('Aborting Push: API shows a newer, modified config.');
+      this.last_pushed_ts = 0;  // revert to clean config
+      this.clean_data$.next(new_clean_data); // share new config
+      return;
+    }
+
+    // Send the update
+    await this.forcePush(data);
+
+    // Wait for a bit, and confirm if we see the api update on the server
+    this.clean_data$.pipe(
+      // Check for the next x seconds
+      timeout(15 * 1000),
+      // Stop looking when we see the first successful update appear
+      filter((new_clean_data) => dirty_hash === this.hash(new_clean_data)),
+      take(1),
+    ).subscribe({
+      next: (data) => {
+        this.log.info(`Successful propagation to carrier api is confirmed for ${this.hash(data)}`);
+        this.events.emit('onGet'); // TODO: pick different event
+      },
+      // As a fail-safe, revert to clean config if update failed
+      error: () => {
+        this.log.error('Changes do not (yet?) appear to have propagated to the carrier api.');
+        this.last_pushed_ts = 0; // revert to clean config
+        this.events.emit('onGet'); // TODO: pick different event
+      },
+    });
+
+    // Poll for updates for the verification above
+    this.events.emit('onGet');
   }
 
-  async getMode(): Promise<string> {
-    await this.fetch();
-    return this.data_object.config.mode[0];
+  private async forcePush(data: Config): Promise<void> {
+    this.log.info('... sending changes to carrier api...');
+
+    const builder = new xml2js.Builder();
+    const new_xml = builder.buildObject(data);
+    // this.log.error(`glenlog push: ${new_xml.replace(/(\r\n|\n)/g, '')}`);
+    const post_data = `data=${encodeURIComponent(new_xml)}`;
+    await this.infinity_client.axios.post(
+      this.getPath(),
+      post_data,
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+      },
+    );
+
+    this.log.debug(`TIMESTAMP UPDATED CONFIG reports ${data.config.timestamp[0]} (${this.last_pushed_ts})`);
+    this.log.debug(`HASH UPDATED CONFIG hashes to (${this.hash(data)})`);
+    this.log.info('... done sending changes to carrier api.');
   }
 
-  private async getZone(zone: string): Promise<CZone> {
-    await this.fetch();
-    return this.data_object.config.zones[0].zone.find(
-      (z) => z['$'].id === zone.toString(),
-    )!;
+  async setMode(mode: string): Promise<void> {
+    this.log.debug('Setting mode to ' + mode);
+    const data = await firstValueFrom(this.data$);
+    // TODO does the first fetched clean actually show this?
+    // data.config.previousMode[0] = data.config.mode[0];
+    data.config.mode[0] = mode;
+    this.dirty_data$.next(data);
   }
 
-  async getZoneName(zone: string): Promise<string> {
-    const zone_obj = await this.getZone(zone);
-    return zone_obj['name'][0];
+  async setZoneActivityHold(
+    zone: string,
+    activity: string,
+    hold_until: string | null,
+  ): Promise<void> {
+    this.log.debug(`Setting zone ${zone} activity to ${activity} until ${hold_until}`);
+
+    // Get data from zone object and make changes
+    const data = await firstValueFrom(this.data$);
+    const zone_obj = findZoneByID(data.config.zones[0].zone, zone);
+    zone_obj['holdActivity']![0] = activity;
+    zone_obj['hold'][0] = activity ? STATUS.ON : STATUS.OFF;
+    zone_obj['otmr'][0] = activity ? hold_until || '' : '';
+
+    // Push changes
+    this.dirty_data$.next(data);
   }
 
-  async getZoneHoldStatus(zone: string): Promise<[string, string]> {
-    const zone_obj = await this.getZone(zone);
-    return [zone_obj['hold'][0], zone_obj['otmr'][0]];
+  // This makes the manual activity match another named activity. This is useful
+  // before switching to the manual activity to make sure only the setpoint you
+  // intend to change is changed.
+  async setZoneActivityManualSync(
+    zone: string,
+    sync_from_activity_name: string,
+  ): Promise<void> {
+    // Get data from zone / activity
+    const data = await firstValueFrom(this.data$);
+    const zone_obj = findZoneByID(data.config.zones[0].zone, zone);
+    const manual_activity_obj = getZoneActivityConfig(data, zone, ACTIVITY.MANUAL);
+
+    // Modify MANUAL activity to match current activity, but only if we have
+    // not already made the switch to manual.
+    if (
+      sync_from_activity_name &&
+      sync_from_activity_name !== ACTIVITY.MANUAL &&
+      zone_obj.holdActivity[0] !== ACTIVITY.MANUAL
+    ) {
+      const prev_activity_obj = getZoneActivityConfig(
+        data,
+        zone,
+        sync_from_activity_name,
+      );
+      manual_activity_obj['clsp'][0] = prev_activity_obj['clsp'][0];
+      manual_activity_obj['htsp'][0] = prev_activity_obj['htsp'][0];
+      manual_activity_obj['fan'][0] = prev_activity_obj['fan'][0];
+
+      // Push changes
+      this.dirty_data$.next(data);
+    }
   }
 
-  async getZoneActivity(zone: string): Promise<string> {
-    const zone_obj = await this.getZone(zone);
-    if (zone_obj.hold[0] === STATUS.ON) {
-      return zone_obj.holdActivity![0];
+  async setZoneActivityManualSetpoints(
+    zone: string,
+    clsp: number | null,
+    htsp: number | null,
+  ): Promise<void> {
+    this.log.debug(
+      `Setting zone ${zone} to`,
+      clsp ? `clsp=${clsp}` : '',
+      htsp ? `htsp=${htsp}` : '',
+      '.',
+    );
+
+    // Get data from zone / activity
+    const data = await firstValueFrom(this.data$);
+    const manual_activity_obj = getZoneActivityConfig(data, zone, ACTIVITY.MANUAL);
+
+    // Set setpoints on manual activity
+    [htsp, clsp] = processSetpointDeadband(
+      htsp || parseFloat(manual_activity_obj['htsp'][0]),
+      clsp || parseFloat(manual_activity_obj['clsp'][0]),
+      data.config.cfgem[0],
+      // when setpoints are too close, make clsp sticky when no change made to htsp
+      htsp === null,
+    );
+    manual_activity_obj['htsp'][0] = htsp.toFixed(1);
+    manual_activity_obj['clsp'][0] = clsp.toFixed(1);
+
+    // Push changes
+    this.dirty_data$.next(data);
+  }
+
+  async setZoneActivityManualFan(
+    zone: string,
+    fan: string,
+  ): Promise<void> {
+    this.log.debug(`Setting zone ${zone} to fan=${fan}.`);
+
+    // Get data from zone / activity
+    const data = await firstValueFrom(this.data$);
+    const manual_activity_obj = getZoneActivityConfig(data, zone, ACTIVITY.MANUAL);
+    manual_activity_obj['fan'][0] = fan;
+
+    // Push changes
+    this.dirty_data$.next(data);
+  }
+}
+
+export class SystemConfigZoneModel {
+  constructor(private zone: Observable<CZone>, private temp_units$: Observable<string>) {}
+
+  public name = this.zone.pipe(map(zone => zone.name[0]), distinctUntilChanged());
+  public hold_status = this.zone.pipe(map(zone => [zone.hold[0], zone.otmr[0]] as [string, string]), distinctUntilChanged());
+
+  // TODO Add a unit test to this
+  public activity = this.zone.pipe(map(zone => {
+    if (zone.hold[0] === STATUS.ON) {
+      return zone.holdActivity![0];
     } else {
       const now = new Date();
-      const program_obj = (await this.getZone(zone)).program![0];
+      const program_obj = zone.program![0];
       const today_schedule = program_obj.day[now.getDay()].period.filter(period => period.enabled[0] === STATUS.ON).reverse();
       for (const i in today_schedule) {
         const time = today_schedule[i].time[0];
@@ -313,45 +576,14 @@ export class SystemConfigModel extends BaseSystemModel {
       ).reverse();
       return yesterday_schedule[0].activity[0];
     }
-  }
+  }), distinctUntilChanged());
 
-  private async getZoneActivityConfig(zone: string, activity_name: string): Promise<CActivity> {
-    await this.fetch();
-    // Vacation is stored somewhere else...
-    if (activity_name === ACTIVITY.VACATION) {
-      return {
-        '$': {id: ACTIVITY.VACATION},
-        clsp: this.data_object.config.vacmaxt,
-        htsp: this.data_object.config.vacmint,
-        fan: this.data_object.config.vacfan,
-        previousFan: [],
-      };
-    }
-
-    const activities_obj = (await this.getZone(zone)).activities![0];
-    return activities_obj['activity'].find(
-      (activity: CActivity) => activity['$'].id === activity_name,
-    )!;
-  }
-
-  async getZoneActivityFan(zone: string, activity: string): Promise<string> {
-    const activity_obj = await this.getZoneActivityConfig(zone, activity);
-    return activity_obj.fan[0];
-  }
-
-  async getZoneActivityCoolSetpoint(zone: string, activity: string): Promise<number> {
-    const activity_obj = await this.getZoneActivityConfig(zone, activity);
-    return Number(activity_obj.clsp[0]);
-  }
-
-  async getZoneActivityHeatSetpoint(zone: string, activity: string): Promise<number> {
-    const activity_obj = await this.getZoneActivityConfig(zone, activity);
-    return Number(activity_obj.htsp[0]);
-  }
-
-  async getZoneNextActivityTime(zone: string): Promise<string> {
+  // TODO this could be made better, and more similar to above.
+  // maybe merge into one fxn?
+  // TODO: this doesnt seem to work right, add tests
+  public next_activity_time = this.zone.pipe(map(zone => {
     const now = new Date();
-    const program_obj = (await this.getZone(zone)).program![0];
+    const program_obj = zone.program![0];
     const day_obj = program_obj['day'][now.getDay()];
     for (const i in day_obj['period']) {
       const time = day_obj['period'][i].time[0];
@@ -368,200 +600,36 @@ export class SystemConfigModel extends BaseSystemModel {
     // If we got to the end without finding the next activity, it means the next activity is the first from tomorrow
     const tomorrow_obj = program_obj['day'][(now.getDay() + 1) % 7];
     return tomorrow_obj['period'][0].time[0];
-  }
+  }), distinctUntilChanged());
 
-  /* Write APIs */
-  mutations: (() => Promise<void>)[] = [];
-
-  private async push(): Promise<void> {
-    // Wait a bit so we can catch other mutations that came in around the
-    // same time.
-    await new Promise(r => setTimeout(r, 2000));
-    // We only ever need 2 pushes ongoing at a time. One active, and one pending.
-    // The first one will handle mutations available at its start, and the next
-    // one will cover mutations that arrived during the previous's run.
-    // First, to make sure we only ever have one 'pending' push, cancel any other
-    // possible 'pending' pushes, and make this one become the 'pending' push.
-    this.write_lock.cancel();
-    // Then, grab the lock. so this push can move from 'pending' to 'active'.
-    try {
-      await this.write_lock.runExclusive(async () => {
-      // 1. Do mutations
-        const mutated_hash = await this.mutate();
-        if (mutated_hash === null) {
-          return;
-        }
-        // 2. Push
-        await this.forcePush();
-        this.log.info('... pushing changes complete.');
-        // 3. Confirm
-        await new Promise(r => setTimeout(r, 5000));
-        await this.forceFetch();
-        if (mutated_hash === this.data_object_hash) {
-          this.log.debug('Successful propagation to carrier api is confirmed.');
-        } else {
-          this.log.warn('Changes do not (yet?) appear to have propagated to the carrier api.');
-        }
-      });
-    } catch (e) {
-      if (e === E_CANCELED) {
-        return;
-      } else if (e === E_TIMEOUT || e === E_ALREADY_LOCKED) {
-        this.log.error(`Deadlock on push ${e}. Report bug: https://bit.ly/3igbU7D`);
-      } else {
-        this.log.error(
-          'Failed to push updates: ',
-          Axios.isAxiosError(e) ? e.message : e,
-        );
-      }
-    }
-  }
-
-  private async mutate(): Promise<string | null> {
-    // short circuit if no mutations in queue
-    if (this.mutations.length === 0) {
-      return null;
-    }
-
-    // Refresh config.
-    const old_hash = this.data_object_hash;
-    await this.forceFetch();
-    if (old_hash !== this.data_object_hash) {
-      this.log.warn('Cached config was stale before mutation and push.');
-    }
-
-    // Take config mutations of the queue and run them.
-    // TODO make mutations non-async. these need to happen in order. and async
-    // in a loop is an anti-pattern.
-    while(this.mutations.length > 0) {
-      const m = this.mutations.shift();
-      if (m) {
-        await m();
-      }
-    }
-    const mutated_hash = this.hashDataObject();
-
-    // If nothing actually changed, no need to push.
-    if (old_hash === mutated_hash) {
-      this.log.warn('Config doesn\'t appear to have changed. No changes sent.');
-      return null;
-    }
-
-    return mutated_hash;
-  }
-
-  private async forcePush(): Promise<void> {
-    this.log.info('Pushing changes to carrier api...');
-    const builder = new xml2js.Builder();
-    const new_xml = builder.buildObject(this.data_object);
-    const data = `data=${encodeURIComponent(new_xml)}`;
-    await this.infinity_client.axios.post(
-      this.getPath(),
-      data,
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+  private current_activity_config$ = combineLatest([
+    this.zone,
+    this.activity],
+  ).pipe(
+    debounceTime(50),
+    map(
+      ([zone, activity_name]) => {
+        return zone.activities[0].activity.find(
+          (a) => a['$'].id === activity_name,
+        )!;
       },
-    );
-  }
+    ),
+    distinctUntilChanged(),
+  );
 
-  async setMode(mode: string): Promise<void> {
-    this.mutations.push(async () => {
-      this.mutateMode(mode);
-    });
-    // Schedule the push event, but don't wait for it to return.
-    this.push();
-  }
+  public fan = this.current_activity_config$.pipe(map(activity => activity.fan[0]), distinctUntilChanged());
 
-  private mutateMode(mode: string): void {
-    this.log.debug('Setting mode to ' + mode);
-    this.data_object.config.mode[0] = mode;
-  }
+  public cool_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(
+    debounceTime(50),
+    map(([activity, temp_units]) => [Number(activity.clsp[0]), temp_units] as TempWithUnit),
+    distinctUntilChanged(),
+  );
 
-  async setZoneActivityHold(
-    zone: string,
-    activity: string,
-    hold_until: string | null,
-  ): Promise<void> {
-    this.mutations.push(async () => {
-      await this.mutateZoneActivityHold(zone, activity, hold_until);
-    });
-    // Schedule the push event, but don't wait for it to return.
-    this.push();
-  }
-
-  private async mutateZoneActivityHold(
-    zone: string,
-    activity: string,
-    hold_until: string | null,
-  ): Promise<void> {
-    this.log.debug(`Setting zone ${zone} activity to ${activity} until ${hold_until}`);
-    const zone_obj = await this.getZone(zone);
-    zone_obj['holdActivity']![0] = activity;
-    zone_obj['hold'][0] = activity ? STATUS.ON : STATUS.OFF;
-    zone_obj['otmr'][0] = activity ? hold_until || '' : '';
-  }
-
-  async setZoneActivityManualHold(
-    zone: string,
-    clsp: number | null,
-    htsp: number | null,
-    hold_until: string | null,
-    fan: string | null = null,
-  ): Promise<void> {
-    // Modify MANUAL activity to the requested setpoints
-    this.mutations.push(async () => {
-      await this.mutateZoneActivityManualHold(zone, clsp, htsp, fan);
-    });
-    // Set hold to MANUAL activity
-    this.mutations.push(async () => {
-      await this.mutateZoneActivityHold(zone, ACTIVITY.MANUAL, hold_until);
-    });
-    // Schedule the push event, but don't wait for it to return.
-    this.push();
-  }
-
-  private async mutateZoneActivityManualHold(
-    zone: string,
-    clsp: number | null,
-    htsp: number | null,
-    fan: string | null = null,
-  ): Promise<void> {
-    this.log.debug(
-      `Setting zone ${zone} to`,
-      clsp ? `clsp=${clsp}` : '',
-      htsp ? `htsp=${htsp}` : '',
-      fan ? `fan=${fan}` : '',
-      '.',
-    );
-    const zone_obj = await this.getZone(zone);
-    // When moving to manual activity, default to prev activity settings.
-    const manual_activity_obj = await this.getZoneActivityConfig(zone, ACTIVITY.MANUAL);
-    if (zone_obj['holdActivity']![0] !== ACTIVITY.MANUAL) {
-      const prev_activity_obj = await this.getZoneActivityConfig(
-        zone,
-        await this.getZoneActivity(zone),
-      );
-      manual_activity_obj['clsp'][0] = prev_activity_obj['clsp'][0];
-      manual_activity_obj['htsp'][0] = prev_activity_obj['htsp'][0];
-      manual_activity_obj['fan'][0] = prev_activity_obj['fan'][0];
-    }
-    // Set setpoints on manual activity
-    [htsp, clsp] = processSetpointDeadband(
-      htsp || parseFloat(manual_activity_obj['htsp'][0]),
-      clsp || parseFloat(manual_activity_obj['clsp'][0]),
-      await this.getUnits(),
-      // when setpoints are too close, make clsp sticky when no change made to htsp
-      htsp === null,
-    );
-    manual_activity_obj['htsp'][0] = htsp.toFixed(1);
-    manual_activity_obj['clsp'][0] = clsp.toFixed(1);
-    // Set fan on manual activity
-    if (fan) {
-      manual_activity_obj['fan'][0] = fan;
-    }
-  }
+  public heat_setpoint = combineLatest([this.current_activity_config$, this.temp_units$]).pipe(
+    debounceTime(50),
+    map(([activity, temp_units]) => [Number(activity.htsp[0]), temp_units] as TempWithUnit),
+    distinctUntilChanged(),
+  );
 }
 
 export class SystemModel {
@@ -569,6 +637,7 @@ export class SystemModel {
   public config: SystemConfigModel;
   public profile: SystemProfileModel;
   public log: Logger = new PrefixLogger(this.infinity_client.log, this.serialNumber);
+  public data$!: Observable<[Status, Config, Profile]>;
 
   constructor(
     protected readonly infinity_client: InfinityRestClient,
@@ -589,6 +658,24 @@ export class SystemModel {
       infinity_client,
       serialNumber,
       api_logger,
+    );
+  }
+
+  public getZoneActivity(zone: string): Observable<string> {
+    return combineLatest([
+      this.status.getZone(zone).activity,
+      this.config.getZone(zone).activity,
+    ]).pipe(
+      debounceTime(50),
+      map(([s_activity, c_activity]) => {
+        // Vacation scheduling is weird, and changes infrequently. Just get it from status.
+        if (s_activity === ACTIVITY.VACATION) {
+          return ACTIVITY.VACATION;
+        }
+        // Config has more up to date activity settings.
+        return c_activity;
+      }),
+      distinctUntilChanged(),
     );
   }
 }
