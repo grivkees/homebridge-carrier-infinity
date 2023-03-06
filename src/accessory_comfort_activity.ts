@@ -3,9 +3,11 @@ import { AccessoryInformation, ThermostatCharacteristicWrapper } from './charact
 import { BaseAccessory } from './accessory_base';
 import { ACTIVITY, STATUS } from './api/constants';
 import { CharacteristicValue, UnknownContext } from 'homebridge';
+import { distinctUntilChanged, firstValueFrom, map } from 'rxjs';
 
 class Activity extends ThermostatCharacteristicWrapper {
   ctype = this.Characteristic.On;
+  value = this.system.getZoneActivity(this.context.zone).pipe(map(a => a === this.activity_name), distinctUntilChanged());
 
   constructor(
     public readonly platform: CarrierInfinityHomebridgePlatform,
@@ -15,16 +17,13 @@ class Activity extends ThermostatCharacteristicWrapper {
     super(platform, context);
   }
 
-  get = async () => {
-    return (
-      await this.getActivity()
-    ) === this.activity_name;
-  };
-
   set = async (value: CharacteristicValue) => {
     // Turning off an activity is only allowed for the active activity
     // (otherwise an off on one activity could remove a hold of another)
-    if (!value && await this.getActivity() !== this.activity_name) {
+    if (
+      value === false
+      && await firstValueFrom(this.system.getZoneActivity(this.context.zone)) !== this.activity_name
+    ) {
       throw new this.platform.api.hap.HapStatusError(this.platform.api.hap.HAPStatus.NOT_ALLOWED_IN_CURRENT_STATE);
     }
 
@@ -44,17 +43,13 @@ class Activity extends ThermostatCharacteristicWrapper {
 // current activity. To hold to the manual activity, just change the temp.
 class HoldActivity extends ThermostatCharacteristicWrapper {
   ctype = this.Characteristic.On;
-
-  get = async () => {
-    const zone = await this.system.config.getZoneHoldStatus(this.context.zone);
-    return zone[0] === STATUS.ON;
-  };
+  value = this.system.config.getZone(this.context.zone).hold_status.pipe(map(data => data[0] === STATUS.ON));
 
   set = async (value: CharacteristicValue) => {
     return await this.system.config.setZoneActivityHold(
       this.context.zone,
       // Turning on sets hold for current activity, turning off removes any hold
-      value ? await this.getActivity() : '',
+      value ? await firstValueFrom(this.system.getZoneActivity(this.context.zone)) : '',
       await this.getHoldTime(),
     );
   };

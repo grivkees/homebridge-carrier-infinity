@@ -1,4 +1,3 @@
-import { ACTIVITY } from './api/constants';
 import { SystemModel } from './api/models';
 import { Service, Characteristic, Logger } from 'homebridge';
 import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
@@ -6,6 +5,7 @@ import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
 import { CarrierInfinityHomebridgePlatform } from './platform';
 import { PrefixLogger } from './helper_logging';
 
+import { firstValueFrom, map, Observable, of } from 'rxjs';
 /*
 * Helpers to add handlers to the HAP Service and Characteristic objects.
 */
@@ -42,30 +42,42 @@ export abstract class MultiWrapper extends Wrapper {
 
 export abstract class CharacteristicWrapper extends Wrapper {
   public abstract ctype: WithUUID<new () => Characteristic>;
-  protected props = {};
-  protected get: (() => Promise<CharacteristicValue>) | undefined;
   protected set: ((value: CharacteristicValue) => Promise<void>) | undefined;
-  // used exclusively if no char value is set yet (first accessory load)
-  protected default_value: CharacteristicValue | null = null;
+  // Holds an observable of the system/api-based value
+  protected abstract value: Observable<CharacteristicValue>;
+  protected props?: Observable<object>;
 
   wrap(service: Service): void {
     const characteristic = service.getCharacteristic(this.ctype);
     if (this.props) {
-      characteristic.setProps(this.props);
-    }
-    if (this.get) {
-      characteristic.onGet(async () => {
-        // schedule characteristic update
-        setImmediate(async () => {
-          if (this.get) {
-            characteristic.updateValue(await this.get());
-          }
-        });
-        // and return immediately
-        // try 1) existing value, if falsy, 2) default value, if null, 3) keep existing value
-        return characteristic.value || this.default_value || characteristic.value;
+      this.props.subscribe(async data => {
+        characteristic.setProps(data);
       });
     }
+    // Push updates from the system-based value observable to HK
+    this.value.subscribe(
+      async data => {
+        if (characteristic.value === data) {
+          this.log.warn(`BADPUSH Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
+        } else {
+          this.log.warn(`PUSH Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
+        }
+        characteristic.updateValue(data);
+      },
+    );
+    // Make HK get requests initiate an observable update
+    characteristic.onGet(async () => {
+      // Tell the system model it should update ...
+      this.system.status.events.emit('onGet');
+      this.system.config.events.emit('onGet');
+      // ... and return immediately the last seen api value.
+      const data = await firstValueFrom(this.value);
+      if (characteristic.value !== data) {
+        this.log.warn(`GET Updating ${this.ctype.name} from ${characteristic.value} to ${data}`); // TODO REMOVE
+      }
+      return data;
+    });
+    // Sets call set helper which calls system model
     if (this.set) {
       characteristic.onSet(this.set.bind(this));
     }
@@ -75,20 +87,20 @@ export abstract class CharacteristicWrapper extends Wrapper {
 export abstract class ThermostatCharacteristicWrapper extends CharacteristicWrapper {
   // TODO: check in constructor that context has zone and hold settings
 
-  async getActivity(): Promise<string> {
-    // Vacation scheduling is weird, and changes infrequently. Just get it from status.
-    if (await this.system.status.getZoneActivity(this.context.zone) === ACTIVITY.VACATION) {
-      return ACTIVITY.VACATION;
-    }
-    // Config has more up to date activity settings.
-    return await this.system.config.getZoneActivity(this.context.zone);
-  }
+  // async getActivity(): Promise<string> {
+  //   // Vacation scheduling is weird, and changes infrequently. Just get it from status.
+  //   if (await this.system.status.getZoneActivity(this.context.zone) === ACTIVITY.VACATION) {
+  //     return ACTIVITY.VACATION;
+  //   }
+  //   // Config has more up to date activity settings.
+  //   return await this.system.config.getZoneActivity(this.context.zone);
+  // }
 
   async getHoldTime(): Promise<string> {
     // OTMR setting to say when manual hold should end
     switch (this.context.holdBehavior) {
       case 'activity':
-        return await this.system.config.getZoneNextActivityTime(this.context.zone);
+        return firstValueFrom(this.system.config.getZone(this.context.zone).next_activity_time);
       case 'for_x': {
         const arg = this.context.holdArgument.split(':');
         let target_ms = (new Date()).getTime();
@@ -107,13 +119,25 @@ export abstract class ThermostatCharacteristicWrapper extends CharacteristicWrap
   }
 }
 
-export class AccessoryInformation extends Wrapper {
-  wrap(service: Service): void {
-    this.system.profile.fetch().then(async () => {
-      service
-        .setCharacteristic(this.Characteristic.SerialNumber, this.system.serialNumber)
-        .setCharacteristic(this.Characteristic.Manufacturer, `${await this.system.profile.getBrand()} Home`)
-        .setCharacteristic(this.Characteristic.Model, await this.system.profile.getModel());
-    });
-  }
+class AccessorySerial extends CharacteristicWrapper {
+  ctype = this.Characteristic.SerialNumber;
+  value = of(this.system.serialNumber);
+}
+
+class AccessoryModel extends CharacteristicWrapper {
+  ctype = this.Characteristic.Model;
+  value = this.system.profile.model;
+}
+
+class AccessoryManufacturer extends CharacteristicWrapper {
+  ctype = this.Characteristic.Manufacturer;
+  value = this.system.profile.brand.pipe(map(x => `${x} Home`));
+}
+
+export class AccessoryInformation extends MultiWrapper {
+  WRAPPERS = [
+    AccessorySerial,
+    AccessoryModel,
+    AccessoryManufacturer,
+  ];
 }
