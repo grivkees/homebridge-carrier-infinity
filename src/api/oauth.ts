@@ -1,6 +1,6 @@
 import { INFINITY_API_CONSUMER_KEY, INFINITY_API_CONSUMER_SECRET } from '../settings';
 
-import { AxiosRequestConfig } from 'axios';
+import { InternalAxiosRequestConfig } from 'axios';
 import oauthSignature from 'oauth-signature';
 
 export class OAuthHeaders {
@@ -43,10 +43,7 @@ export class OAuthHeaders {
     return `OAuth ${header_params.join(',')}`;
   }
 
-  static intercept(config: AxiosRequestConfig, username: string, token: string): AxiosRequestConfig {
-    if (config.headers === undefined) {
-      config.headers = {};
-    }
+  static intercept(config: InternalAxiosRequestConfig, username: string, token: string): InternalAxiosRequestConfig {
     config.headers['Authorization'] = this.genHeader(config.method || 'GET', config.url || '/', username, token, config.data);
     return config;
   }
