@@ -61,6 +61,20 @@
         "type": "boolean",
         "default": false,
         "required": true
+      },
+      "statusStaleDataThreshold": {
+        "title": "Stale Threshold",
+        "type": "integer",
+        "default": 30,
+        "minimum": 0,
+        "description": "The number of seconds until your thermostat's data is considered stale."
+      },
+      "maxDataRefreshAttempts": {
+        "title": "Max Refresh Attempts",
+        "type": "integer",
+        "default": 5,
+        "minimum": 0,
+        "description": "The maximum number of times HomeKit will attempt to fetch up-to-date data from your thermostat."
       }
     }
   },
@@ -121,6 +135,18 @@
           "helpvalue": "<em class='primary-text'>Show the thermostat's environmental sensors as discete sensors in HomeKit (as opposed to only being shown as part of the thermostat accessory in HomeKit).</em>"
         },
         "showIndoorHumiditySensors"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Advanced",
+      "items": [
+        {
+          "type": "help",
+          "helpvalue": "<em class='primary-text'>To reduce instances where HomeKit and your thermostat are out of sync (i.e. HomeKit's data is stale), specify the number of attempts HomeKit should make to get up-to-date data from your thermostat. Each attempt takes ~1 second. A large number of failed attempts can increase HomeKit's reponse times. Consider the tradeoff between responsiveness and accuracy of the data. Local testing shows it typically takes <3 seconds to get up-to-date data.</em>"
+        },
+        "statusStaleDataThreshold",
+        "maxDataRefreshAttempts"
       ]
     }
   ]

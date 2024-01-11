@@ -2,7 +2,7 @@ import { processSetpointDeadband } from '../helpers';
 import { MemoizeExpiring } from 'typescript-memoize';
 import { Mutex, tryAcquire, E_ALREADY_LOCKED, E_CANCELED, E_TIMEOUT } from 'async-mutex';
 import * as xml2js from 'xml2js';
-import { Logger } from 'homebridge';
+import { PlatformConfig, Logger } from 'homebridge';
 import hash from 'object-hash';
 import { PrefixLogger } from '../helper_logging';
 import { InfinityRestClient } from './rest_client';
@@ -101,23 +101,59 @@ export class LocationsModel extends BaseModel {
 }
 
 abstract class BaseSystemModel extends BaseModel {
-  private last_updated = 0;  // TODO use this
+  protected last_updated = 0;  // TODO use this
   protected HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime']);
 
   constructor(
     protected readonly infinity_client: InfinityRestClient,
     public readonly serialNumber: string,
     protected readonly log: Logger,
+    protected readonly system_model_settings: SystemModelSettings,
   ) {
     super(infinity_client);
   }
 
-  protected async forceFetch(): Promise<void> {
+  protected isStale(): boolean {
+    return false;
+  }
+
+  private async forceFetchInternal(): Promise<void> {
     await super.forceFetch();
     const top_level_key = Object.keys(this.data_object)[0];
     const ts = this.data_object[top_level_key].timestamp[0];
     this.last_updated = Date.parse(ts);
     this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_updated})`);
+  }
+
+  protected async forceFetch(): Promise<void> {
+    const request_fetch = Date.now();
+    await this.forceFetchInternal();
+
+    // If the object's data is stale and refreshes are allowed, wait and fetch again.
+    const max_data_refresh_attempts = this.system_model_settings.max_data_refresh_attempts;
+    if(this.isStale() && (max_data_refresh_attempts > 0)) {
+      this.log.debug(`${this.getPath()} is stale (${(request_fetch - this.last_updated) / 1000.0 }s), fetching update...`);
+      await this.infinity_client.forceActivate(); // This appears to be needed to kick the API to get recent data from the thermostat.
+
+      for(let i = 0; i < max_data_refresh_attempts; i++) {
+        if(this.last_updated > request_fetch) {
+          break; // Obtained newer data, exit the loop.
+        }
+
+        await new Promise(r => setTimeout(r, 1000));
+        await this.forceFetchInternal();
+      }
+
+      if(this.last_updated > request_fetch) {
+        this.log.debug(`...${this.getPath()} fetch completed (${Date.now() - request_fetch}ms)`);
+      } else {
+        this.log.debug(`...${this.getPath()} fetch failed after ${max_data_refresh_attempts} attempts`);
+      }
+
+      if(this.isStale()) {
+        this.log.warn(`${this.getPath()} is stale (last updated ${new Date(this.last_updated)}`);
+      }
+    }
   }
 }
 
@@ -160,6 +196,14 @@ export class SystemProfileModel extends BaseSystemModel {
 
 export class SystemStatusModel extends BaseSystemModel {
   protected data_object!: Status;
+
+  protected isStale(): boolean {
+    if(this.system_model_settings.status_stale_threshold) {
+      return ((Date.now() - this.last_updated) > (this.system_model_settings.status_stale_threshold));
+    } else {
+      return false;
+    }
+  }
 
   getPath(): string {
     return `/systems/${this.serialNumber}/status`;
@@ -617,6 +661,21 @@ export class SystemConfigModel extends SystemConfigModelReadOnly {
   }
 }
 
+export class SystemModelSettings {
+  public readonly max_data_refresh_attempts:number;
+  public readonly status_stale_threshold:number;
+
+  constructor(
+    private readonly config: PlatformConfig,
+  ) {
+    this.max_data_refresh_attempts = config.maxDataRefreshAttempts;
+    this.status_stale_threshold = config.statusStaleDataThreshold;
+    if(this.status_stale_threshold) {
+      this.status_stale_threshold *= 1000; // Convert to milliseconds.
+    }
+  }
+}
+
 export class SystemModel {
   public status: SystemStatusModel;
   public config: SystemConfigModel;
@@ -626,22 +685,26 @@ export class SystemModel {
   constructor(
     protected readonly infinity_client: InfinityRestClient,
     public readonly serialNumber: string,
+    private readonly system_model_settings: SystemModelSettings,
   ) {
     const api_logger = new PrefixLogger(this.log, 'API');
     this.status = new SystemStatusModel(
       infinity_client,
       serialNumber,
       api_logger,
+      system_model_settings,
     );
     this.config = new SystemConfigModel(
       infinity_client,
       serialNumber,
       api_logger,
+      system_model_settings,
     );
     this.profile = new SystemProfileModel(
       infinity_client,
       serialNumber,
       api_logger,
+      system_model_settings,
     );
   }
 }
