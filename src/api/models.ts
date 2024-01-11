@@ -29,9 +29,9 @@ abstract class BaseModel {
 
   abstract getPath(): string;
 
-  protected hashDataObject(): string {
+  protected hashDataObject(data?: object): string {
     return hash(
-      this.data_object,
+      data || this.data_object,
       {excludeKeys: (key) => {
         return this.HASH_IGNORE_KEYS.has(key);
       }},
@@ -60,12 +60,19 @@ abstract class BaseModel {
   }
 
   protected async forceFetch(): Promise<void> {
+    const [data_object_hash, data_object] = await this.forceFetchInternal();
+    this.data_object = data_object;
+    this.data_object_hash = data_object_hash;
+  }
+
+  protected async forceFetchInternal(): Promise<[string, object]> {
     await this.infinity_client.refreshToken();
     await this.infinity_client.activate();
     const response = await this.infinity_client.axios.get(this.getPath());
     if (response.data) {
-      this.data_object = await xml2js.parseStringPromise(response.data) as object;
-      this.data_object_hash = this.hashDataObject();
+      const data_object = await xml2js.parseStringPromise(response.data) as object;
+      const data_object_hash = this.hashDataObject(data_object);
+      return [data_object_hash, data_object];
     } else {
       this.log.debug(response.data);
       throw new Error('Response from API contained errors.');
@@ -247,16 +254,20 @@ export class SystemStatusModel extends BaseSystemModel {
   }
 }
 
-export class SystemConfigModel extends BaseSystemModel {
+export class SystemConfigModelReadOnly extends BaseSystemModel {
   protected data_object!: Config;
 
   getPath(): string {
     return `/systems/${this.serialNumber}/config`;
   }
 
+  protected static getUnits(data_object: Config): string {
+    return data_object.config.cfgem[0];
+  }
+
   async getUnits(): Promise<string> {
     await this.fetch();
-    return this.data_object.config.cfgem[0];
+    return SystemConfigModelReadOnly.getUnits(this.data_object);
   }
 
   async getTempBounds(): Promise<[number, number]> {
@@ -270,11 +281,15 @@ export class SystemConfigModel extends BaseSystemModel {
     return this.data_object.config.mode[0];
   }
 
-  private async getZone(zone: string): Promise<CZone> {
-    await this.fetch();
-    return this.data_object.config.zones[0].zone.find(
+  protected static getZone(data_object: Config, zone: string): CZone {
+    return data_object.config.zones[0].zone.find(
       (z) => z['$'].id === zone.toString(),
     )!;
+  }
+
+  protected async getZone(zone: string): Promise<CZone> {
+    await this.fetch();
+    return SystemConfigModelReadOnly.getZone(this.data_object, zone);
   }
 
   async getZoneName(zone: string): Promise<string> {
@@ -287,13 +302,13 @@ export class SystemConfigModel extends BaseSystemModel {
     return [zone_obj['hold'][0], zone_obj['otmr'][0]];
   }
 
-  async getZoneActivity(zone: string): Promise<string> {
-    const zone_obj = await this.getZone(zone);
+  protected static getZoneActivity(data_object: Config, zone: string): string {
+    const zone_obj = SystemConfigModelReadOnly.getZone(data_object, zone);
     if (zone_obj.hold[0] === STATUS.ON) {
       return zone_obj.holdActivity![0];
     } else {
       const now = new Date();
-      const program_obj = (await this.getZone(zone)).program![0];
+      const program_obj = SystemConfigModelReadOnly.getZone(data_object, zone).program![0];
       const today_schedule = program_obj.day[now.getDay()].period.filter(period => period.enabled[0] === STATUS.ON).reverse();
       for (const i in today_schedule) {
         const time = today_schedule[i].time[0];
@@ -315,23 +330,32 @@ export class SystemConfigModel extends BaseSystemModel {
     }
   }
 
-  private async getZoneActivityConfig(zone: string, activity_name: string): Promise<CActivity> {
+  async getZoneActivity(zone: string): Promise<string> {
     await this.fetch();
+    return SystemConfigModelReadOnly.getZoneActivity(this.data_object, zone);
+  }
+
+  protected static getZoneActivityConfig(data_object: Config, zone: string, activity_name: string): CActivity {
     // Vacation is stored somewhere else...
     if (activity_name === ACTIVITY.VACATION) {
       return {
         '$': {id: ACTIVITY.VACATION},
-        clsp: this.data_object.config.vacmaxt,
-        htsp: this.data_object.config.vacmint,
-        fan: this.data_object.config.vacfan,
+        clsp: data_object.config.vacmaxt,
+        htsp: data_object.config.vacmint,
+        fan: data_object.config.vacfan,
         previousFan: [],
       };
     }
 
-    const activities_obj = (await this.getZone(zone)).activities![0];
+    const activities_obj = SystemConfigModelReadOnly.getZone(data_object, zone).activities![0];
     return activities_obj['activity'].find(
       (activity: CActivity) => activity['$'].id === activity_name,
     )!;
+  }
+
+  protected async getZoneActivityConfig(zone: string, activity_name: string): Promise<CActivity> {
+    await this.fetch();
+    return SystemConfigModelReadOnly.getZoneActivityConfig(this.data_object, zone, activity_name);
   }
 
   async getZoneActivityFan(zone: string, activity: string): Promise<string> {
@@ -369,9 +393,20 @@ export class SystemConfigModel extends BaseSystemModel {
     const tomorrow_obj = program_obj['day'][(now.getDay() + 1) % 7];
     return tomorrow_obj['period'][0].time[0];
   }
+}
 
-  /* Write APIs */
-  mutations: (() => Promise<void>)[] = [];
+interface ConfigMutation {
+  (data_object: Config): void;
+}
+
+export class SystemConfigModel extends SystemConfigModelReadOnly {
+  /*
+   * A writable version of the system config model.
+   *
+   * Provides a set data api, which is cached locally, and periodically pushed
+   * out to the carrier api.
+   */
+  mutations: ConfigMutation[] = [];
 
   private async push(): Promise<void> {
     // Wait a bit so we can catch other mutations that came in around the
@@ -387,14 +422,16 @@ export class SystemConfigModel extends BaseSystemModel {
     try {
       await this.write_lock.runExclusive(async () => {
       // 1. Do mutations
-        const mutated_hash = await this.mutate();
-        if (mutated_hash === null) {
+        const mutated = await this.mutate();
+        if (mutated === null) {
           return;
         }
+        const [mutated_hash, mutated_data_object] = mutated;
         // 2. Push
-        await this.forcePush();
+        await this.forcePush(mutated_data_object);
         this.log.info('... pushing changes complete.');
         // 3. Confirm
+        // TODO Try this a few times in a loop
         await new Promise(r => setTimeout(r, 5000));
         await this.forceFetch();
         if (mutated_hash === this.data_object_hash) {
@@ -417,43 +454,44 @@ export class SystemConfigModel extends BaseSystemModel {
     }
   }
 
-  private async mutate(): Promise<string | null> {
+  private async mutate(): Promise<[string, Config] | null> {
     // short circuit if no mutations in queue
     if (this.mutations.length === 0) {
       return null;
     }
 
-    // Refresh config.
-    const old_hash = this.data_object_hash;
-    await this.forceFetch();
-    if (old_hash !== this.data_object_hash) {
+    // Refresh config, to make sure we don't write back old data accidentally.
+    const stale_hash = this.data_object_hash;
+    const [fresh_hash, fresh_data_object] = await this.forceFetchInternal();
+    if (stale_hash !== fresh_hash) {
       this.log.warn('Cached config was stale before mutation and push.');
     }
 
-    // Take config mutations of the queue and run them.
-    // TODO make mutations non-async. these need to happen in order. and async
-    // in a loop is an anti-pattern.
+    // Take config mutations of the queue and run them against the fresh object.
+    // This ensures we don't overwrite other data if the api config has changed,
+    // and avoids a race condition where new mutations come in during the push.
+    const mutated_data_object = fresh_data_object as Config;
     while(this.mutations.length > 0) {
       const m = this.mutations.shift();
       if (m) {
-        await m();
+        m(mutated_data_object);
       }
     }
-    const mutated_hash = this.hashDataObject();
+    const mutated_hash = this.hashDataObject(mutated_data_object);
 
     // If nothing actually changed, no need to push.
-    if (old_hash === mutated_hash) {
+    if (fresh_hash === mutated_hash) {
       this.log.warn('Config doesn\'t appear to have changed. No changes sent.');
       return null;
     }
 
-    return mutated_hash;
+    return [mutated_hash, mutated_data_object];
   }
 
-  private async forcePush(): Promise<void> {
+  private async forcePush(data_object: Config): Promise<void> {
     this.log.info('Pushing changes to carrier api...');
     const builder = new xml2js.Builder();
-    const new_xml = builder.buildObject(this.data_object);
+    const new_xml = builder.buildObject(data_object);
     const data = `data=${encodeURIComponent(new_xml)}`;
     await this.infinity_client.axios.post(
       this.getPath(),
@@ -467,16 +505,20 @@ export class SystemConfigModel extends BaseSystemModel {
   }
 
   async setMode(mode: string): Promise<void> {
-    this.mutations.push(async () => {
-      this.mutateMode(mode);
-    });
+    this.log.debug('Setting mode to ' + mode);
+
+    const m = (data_object: Config) => {
+      SystemConfigModel.mutateMode(data_object, mode);
+    };
+    // Mutate the local state to propagate changes throughout HK.
+    m(this.data_object);
     // Schedule the push event, but don't wait for it to return.
+    this.mutations.push(m);
     this.push();
   }
 
-  private mutateMode(mode: string): void {
-    this.log.debug('Setting mode to ' + mode);
-    this.data_object.config.mode[0] = mode;
+  private static mutateMode(data_object: Config, mode: string): void {
+    data_object.config.mode[0] = mode;
   }
 
   async setZoneActivityHold(
@@ -484,20 +526,25 @@ export class SystemConfigModel extends BaseSystemModel {
     activity: string,
     hold_until: string | null,
   ): Promise<void> {
-    this.mutations.push(async () => {
-      await this.mutateZoneActivityHold(zone, activity, hold_until);
-    });
+    this.log.debug(`Setting zone ${zone} activity to ${activity} until ${hold_until}`);
+
+    const m = (data_object: Config) => {
+      SystemConfigModel.mutateZoneActivityHold(data_object, zone, activity, hold_until);
+    };
+    // Mutate the local state to propagate changes throughout HK.
+    m(this.data_object);
     // Schedule the push event, but don't wait for it to return.
+    this.mutations.push(m);
     this.push();
   }
 
-  private async mutateZoneActivityHold(
+  private static mutateZoneActivityHold(
+    data_object: Config,
     zone: string,
     activity: string,
     hold_until: string | null,
-  ): Promise<void> {
-    this.log.debug(`Setting zone ${zone} activity to ${activity} until ${hold_until}`);
-    const zone_obj = await this.getZone(zone);
+  ): void {
+    const zone_obj = SystemConfigModel.getZone(data_object, zone);
     zone_obj['holdActivity']![0] = activity;
     zone_obj['hold'][0] = activity ? STATUS.ON : STATUS.OFF;
     zone_obj['otmr'][0] = activity ? hold_until || '' : '';
@@ -510,24 +557,6 @@ export class SystemConfigModel extends BaseSystemModel {
     hold_until: string | null,
     fan: string | null = null,
   ): Promise<void> {
-    // Modify MANUAL activity to the requested setpoints
-    this.mutations.push(async () => {
-      await this.mutateZoneActivityManualHold(zone, clsp, htsp, fan);
-    });
-    // Set hold to MANUAL activity
-    this.mutations.push(async () => {
-      await this.mutateZoneActivityHold(zone, ACTIVITY.MANUAL, hold_until);
-    });
-    // Schedule the push event, but don't wait for it to return.
-    this.push();
-  }
-
-  private async mutateZoneActivityManualHold(
-    zone: string,
-    clsp: number | null,
-    htsp: number | null,
-    fan: string | null = null,
-  ): Promise<void> {
     this.log.debug(
       `Setting zone ${zone} to`,
       clsp ? `clsp=${clsp}` : '',
@@ -535,13 +564,37 @@ export class SystemConfigModel extends BaseSystemModel {
       fan ? `fan=${fan}` : '',
       '.',
     );
-    const zone_obj = await this.getZone(zone);
+
+    const m = (data_object: Config) => {
+      // Modify MANUAL activity to the requested setpoints
+      SystemConfigModel.mutateZoneActivityManualHold(data_object, zone, clsp, htsp, fan);
+      // Set hold to MANUAL activity
+      SystemConfigModel.mutateZoneActivityHold(data_object, zone, ACTIVITY.MANUAL, hold_until);
+
+    };
+
+    // Mutate the local state to propagate changes throughout HK.
+    m(this.data_object);
+    // Schedule the push event, but don't wait for it to return.
+    this.mutations.push(m);
+    this.push();
+  }
+
+  private static mutateZoneActivityManualHold(
+    data_object: Config,
+    zone: string,
+    clsp: number | null,
+    htsp: number | null,
+    fan: string | null = null,
+  ): void {
+    const zone_obj = SystemConfigModel.getZone(data_object, zone);
     // When moving to manual activity, default to prev activity settings.
-    const manual_activity_obj = await this.getZoneActivityConfig(zone, ACTIVITY.MANUAL);
+    const manual_activity_obj = SystemConfigModel.getZoneActivityConfig(data_object, zone, ACTIVITY.MANUAL);
     if (zone_obj['holdActivity']![0] !== ACTIVITY.MANUAL) {
-      const prev_activity_obj = await this.getZoneActivityConfig(
+      const prev_activity_obj = SystemConfigModel.getZoneActivityConfig(
+        data_object,
         zone,
-        await this.getZoneActivity(zone),
+        SystemConfigModel.getZoneActivity(data_object, zone),
       );
       manual_activity_obj['clsp'][0] = prev_activity_obj['clsp'][0];
       manual_activity_obj['htsp'][0] = prev_activity_obj['htsp'][0];
@@ -551,7 +604,7 @@ export class SystemConfigModel extends BaseSystemModel {
     [htsp, clsp] = processSetpointDeadband(
       htsp || parseFloat(manual_activity_obj['htsp'][0]),
       clsp || parseFloat(manual_activity_obj['clsp'][0]),
-      await this.getUnits(),
+      SystemConfigModel.getUnits(data_object),
       // when setpoints are too close, make clsp sticky when no change made to htsp
       htsp === null,
     );
