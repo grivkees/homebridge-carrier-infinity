@@ -7,12 +7,13 @@ import hash from 'object-hash';
 import { PrefixLogger } from '../helper_logging';
 import { InfinityRestClient } from './rest_client';
 import Axios from 'axios';
+import EventEmitter from 'events';
 
 import Config, {Zone as CZone, Activity3 as CActivity} from './interface_config';
 import Location from './interface_locations';
 import Profile from './interface_profile';
 import Status, {Zone as SZone} from './interface_status';
-import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS } from './constants';
+import { ACTIVITY, FAN_MODE, SYSTEM_MODE, STATUS, SUBSCRIPTION } from './constants';
 
 abstract class BaseModel {
   protected data_object!: object;
@@ -108,16 +109,22 @@ abstract class BaseSystemModel extends BaseModel {
     protected readonly infinity_client: InfinityRestClient,
     public readonly serialNumber: string,
     protected readonly log: Logger,
+    protected readonly events: EventEmitter,
   ) {
     super(infinity_client);
   }
 
   protected async forceFetch(): Promise<void> {
+    const old_hash = this.data_object_hash;
     await super.forceFetch();
+    const new_hash = this.data_object_hash;
     const top_level_key = Object.keys(this.data_object)[0];
     const ts = this.data_object[top_level_key].timestamp[0];
     this.last_updated = Date.parse(ts);
     this.log.debug(`TIMESTAMP ${this.getPath()} reports ${ts} (${this.last_updated})`);
+    if (old_hash !== new_hash) {
+      this.events.emit(`updated_${top_level_key}`);
+    }
   }
 }
 
@@ -409,6 +416,8 @@ export class SystemConfigModel extends SystemConfigModelReadOnly {
   mutations: ConfigMutation[] = [];
 
   private async push(): Promise<void> {
+    // While waiting to push to api, push locally to HK.
+    this.events.emit(SUBSCRIPTION.CONFIG_MUTATE);
     // Wait a bit so we can catch other mutations that came in around the
     // same time.
     await new Promise(r => setTimeout(r, 2000));
@@ -622,6 +631,7 @@ export class SystemModel {
   public config: SystemConfigModel;
   public profile: SystemProfileModel;
   public log: Logger = new PrefixLogger(this.infinity_client.log, this.serialNumber);
+  public events: EventEmitter = new EventEmitter().setMaxListeners(100);
 
   constructor(
     protected readonly infinity_client: InfinityRestClient,
@@ -632,16 +642,19 @@ export class SystemModel {
       infinity_client,
       serialNumber,
       api_logger,
+      this.events,
     );
     this.config = new SystemConfigModel(
       infinity_client,
       serialNumber,
       api_logger,
+      this.events,
     );
     this.profile = new SystemProfileModel(
       infinity_client,
       serialNumber,
       api_logger,
+      this.events,
     );
   }
 }

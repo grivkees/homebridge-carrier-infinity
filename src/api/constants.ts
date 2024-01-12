@@ -26,3 +26,10 @@ export const STATUS = {
   ON: 'on',
   OFF: 'off',
 };
+
+export const SUBSCRIPTION = {
+  CONFIG: 'updated_config',
+  STATUS: 'updated_status',
+  PROFILE: 'updated_system_profile',
+  CONFIG_MUTATE: 'mutate_config',
+};
