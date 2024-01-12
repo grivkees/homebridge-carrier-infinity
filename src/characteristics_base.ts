@@ -1,4 +1,4 @@
-import { ACTIVITY } from './api/constants';
+import { ACTIVITY, SUBSCRIPTION } from './api/constants';
 import { SystemModel } from './api/models';
 import { Service, Characteristic, Logger } from 'homebridge';
 import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
@@ -54,17 +54,28 @@ export abstract class CharacteristicWrapper extends Wrapper {
       characteristic.setProps(this.props);
     }
     if (this.get) {
-      characteristic.onGet(async () => {
-        // schedule characteristic update
-        setImmediate(async () => {
+      // This magic callback schedules another async callback to actually fetch
+      // and update the characteristic. This lets us convert a sync callback to
+      // an async callback.
+      const callback = () => {
+        // Schedule async update to HK characteristic.
+        process.nextTick(async () => {
           if (this.get) {
             characteristic.updateValue(await this.get());
           }
         });
-        // and return immediately
+        // Return immediately with the current, stale value. This is needed for
+        // this to be a valid callback to onGet.
         // try 1) existing value, if falsy, 2) default value, if null, 3) keep existing value
         return characteristic.value || this.default_value || characteristic.value;
-      });
+      };
+
+      // Listen for HK 'get' requests. Schedule async update push to HK.
+      characteristic.onGet(callback);
+      // Listen for api updates. Schedule async update push to HK.
+      this.system.events.on(SUBSCRIPTION.CONFIG, callback);
+      this.system.events.on(SUBSCRIPTION.CONFIG_MUTATE, callback);
+      this.system.events.on(SUBSCRIPTION.STATUS, callback);
     }
     if (this.set) {
       characteristic.onSet(this.set.bind(this));
