@@ -78,6 +78,9 @@ export class ComfortActivityAccessory extends BaseAccessory {
         this.platform.Service.Switch,
         'Manual Hold',
         'hold',
+      ).setCharacteristic(
+        this.platform.Characteristic.ConfiguredName,
+        'Manual Hold',
       ),
     );
 
@@ -88,6 +91,7 @@ export class ComfortActivityAccessory extends BaseAccessory {
       ACTIVITY.SLEEP,
     ].forEach(
       (activity) => {
+        const switch_name = `${activity[0].toUpperCase()}${activity.slice(1)}`;
         new Activity(
           this.platform,
           this.accessory.context,
@@ -95,8 +99,11 @@ export class ComfortActivityAccessory extends BaseAccessory {
         ).wrap(
           this.useService(
             this.platform.Service.Switch,
-            `${activity[0].toUpperCase()}${activity.slice(1)}`,
+            switch_name,
             activity,
+          ).setCharacteristic(
+            this.platform.Characteristic.ConfiguredName,
+            switch_name,
           ),
         );
       },
