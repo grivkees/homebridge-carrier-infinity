@@ -415,6 +415,14 @@ export class SystemConfigModel extends SystemConfigModelReadOnly {
    */
   mutations: ConfigMutation[] = [];
 
+  // Skip fetching new data when we have a dirty local state.
+  async fetch(): Promise<void> {
+    if (this.mutations.length > 0) {
+      return;
+    }
+    await super.fetch();
+  }
+
   private async push(): Promise<void> {
     // While waiting to push to api, push locally to HK.
     this.events.emit(SUBSCRIPTION.CONFIG_MUTATE);
