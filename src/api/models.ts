@@ -448,8 +448,15 @@ export class SystemConfigModel extends SystemConfigModelReadOnly {
         await this.forcePush(mutated_data_object);
         this.log.info('... pushing changes complete.');
         // 3. Confirm
-        // TODO Try this a few times in a loop
         await new Promise(r => setTimeout(r, 5000));
+        if (this.mutations.length > 0) {
+          // If local state is dirty (from new mutations queued during push)
+          // don't do a forceFetch or it will cause apparent bouncing, let the
+          // next push refresh from remote api state.
+          // This is safe because mutations are always done on a fresh fetched
+          // config, even if local config is dirty or stale.
+          return;
+        }
         await this.forceFetch();
         if (mutated_hash === this.data_object_hash) {
           this.log.debug('Successful propagation to carrier api is confirmed.');
