@@ -11,6 +11,10 @@ export class PrefixLogger implements Logger {
     this.log(LogLevel.INFO, message, ...parameters);
   }
 
+  public success(message: string, ...parameters: any[]): void {
+    this.log(LogLevel.SUCCESS, message, ...parameters);
+  }
+
   public warn(message: string, ...parameters: any[]): void {
     this.log(LogLevel.WARN, message, ...parameters);
   }
