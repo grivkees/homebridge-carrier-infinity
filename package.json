@@ -19,7 +19,8 @@
   "scripts": {
     "commit": "git-cz",
     "lint": "eslint src/**.ts --max-warnings=0",
-    "watch": "npm run build && (sudo hb-service link || true) && nodemon",
+    "relink": "sudo rsync -rl --chown homebridge:homebridge ../homebridge-carrier-infinity /var/lib/homebridge/node_modules/ && sudo hb-service restart",
+    "watch": "npm run build && nodemon",
     "build": "rimraf ./dist && tsc",
     "prepublishOnly": "npm run lint && npm run build",
     "test": "jest",
@@ -30,7 +31,7 @@
       "src"
     ],
     "ext": "ts",
-    "exec": "tsc && sudo hb-service restart",
+    "exec": "tsc && npm run relink",
     "delay": 5000,
     "env": {
       "NODE_OPTIONS": "--trace-warnings"
