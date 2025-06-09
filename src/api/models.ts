@@ -672,5 +672,11 @@ export class SystemModel {
       api_logger,
       this.events,
     );
+    // Periodically ping the carrier api to keep it in sync with the thermostat.
+    // By fetching status, we both make sure 'activate' gets called, and
+    // internal state of status is updated, which will push updates to HK.
+    setInterval(() => {
+      this.status.fetch();
+    }, 30 * 60 * 1000); // every 30 min
   }
 }

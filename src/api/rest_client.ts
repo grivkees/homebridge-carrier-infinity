@@ -5,6 +5,7 @@ import xml2js from 'xml2js';
 import Axios, { AxiosInstance } from 'axios';
 import { Logger } from 'homebridge';
 import { MemoizeExpiring } from 'typescript-memoize';
+import { Retryable, BackOffPolicy } from 'typescript-retry-decorator';
 
 export class InfinityRestClient {
   private access_token = '';
@@ -78,6 +79,7 @@ export class InfinityRestClient {
   async refreshToken(): Promise<void> {
     try {
       await this.forceRefreshToken();
+      this.log.info('Completed login / token refresh successfully.');
     } catch (error) {
       this.log.error(
         '[API] Could not refresh access token: ',
@@ -86,8 +88,14 @@ export class InfinityRestClient {
     }
   }
 
-  // TODO: on some api errors, force a refresh
+  @Retryable({
+    maxAttempts: 5,
+    backOffPolicy: BackOffPolicy.ExponentialBackOffPolicy,
+    backOff: 1000,
+    exponentialOption: { maxInterval: 5 * 60 * 1000, multiplier: 5 },
+  })
   async forceRefreshToken(): Promise<void> {
+    this.log.info('Attempting login / token refresh.');
     const builder = new xml2js.Builder({cdata: true, headless: true});
     const new_xml = builder.buildObject({
       credentials: {

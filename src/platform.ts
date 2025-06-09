@@ -35,9 +35,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     }
 
     this.infinity_client = new InfinityRestClient(config['username'], config['password'], this.log);
-    this.infinity_client.forceRefreshToken().then().catch(error => {
-      this.log.error('Login failed: ' + error.message);
-    });
+    this.infinity_client.refreshToken().then(); // Speed up init by starting login right away
 
     this.api.on('didFinishLaunching', () => {
       this.discoverSystems().then().catch(error => {
@@ -59,6 +57,10 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   }
 
   async discoverSystems(): Promise<void> {
+    // Login / wait for login token to appear
+    await this.infinity_client.refreshToken();
+
+    // Query for systems, start adding accessories
     const systems = await new LocationsModel(this.infinity_client).getSystems();
     for (const serialNumber of systems) {
       // Create system api object, and save for later reference
