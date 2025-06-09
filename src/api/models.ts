@@ -278,8 +278,9 @@ export class SystemConfigModelReadOnly extends BaseSystemModel {
   }
 
   async getTempBounds(): Promise<[number, number]> {
+    // TODO: Utility event isn't always set. Find somewhere else to get this #543
     await this.fetch();
-    const utility_events = this.data_object.config.utilityEvent[0];
+    const utility_events = this.data_object.config.utilityEvent?.[0] || {'minLimit':['50'], 'maxLimit':['90']};
     return [Number(utility_events.minLimit[0]), Number(utility_events.maxLimit[0])];
   }
 
