@@ -12,8 +12,8 @@
     "url": "https://github.com/grivkees/homebridge-carrier-infinity/issues"
   },
   "engines": {
-    "node": ">=12.13.0",
-    "homebridge": ">=1.2"
+    "node": ">=18",
+    "homebridge": ">=1.2 || ^2.0.0-beta.0"
   },
   "main": "dist/index.js",
   "scripts": {
