@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     uses: ./.github/workflows/build.yml
+    permissions:
+      contents: read
   release:
     permissions:
       contents: write
