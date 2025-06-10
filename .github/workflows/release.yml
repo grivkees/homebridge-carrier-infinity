@@ -10,6 +10,11 @@ jobs:
   build:
     uses: ./.github/workflows/build.yml
   release:
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      packages: write
     needs: [build]
     runs-on: ubuntu-latest
     environment: Release
