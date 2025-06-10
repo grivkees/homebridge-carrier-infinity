@@ -1,7 +1,8 @@
 import { INFINITY_API_CONSUMER_KEY, INFINITY_API_CONSUMER_SECRET } from '../settings';
 
+import crypto from 'crypto';
 import { InternalAxiosRequestConfig } from 'axios';
-import oauthSignature from 'oauth-signature';
+import { sign } from 'oauth-sign';
 
 export class OAuthHeaders {
   static genHeader(httpMethod: string, url: string, username: string, token: string, data: string | null): string {
@@ -11,8 +12,7 @@ export class OAuthHeaders {
       oauth_token : username,
       oauth_signature_method : 'HMAC-SHA1',
       oauth_timestamp : Math.floor(Date.now() / 1000),
-      // TODO: make nonce bigger
-      oauth_nonce : Math.floor(Math.random() * 100000000000) + 1,
+      oauth_nonce : crypto.randomBytes(12).toString('base64'),
       oauth_version : '1.0',
     };
 
@@ -27,9 +27,15 @@ export class OAuthHeaders {
     }
     const sig_params = Object.assign({}, sig_header_params, sig_body_params);
 
-
     // Make the sig
-    const signature = oauthSignature.generate(httpMethod, url, sig_params, INFINITY_API_CONSUMER_SECRET, token);
+    const signature = sign(
+      sig_header_params['oauth_signature_method'],
+      httpMethod,
+      'http://' + url,
+      sig_params,
+      INFINITY_API_CONSUMER_SECRET,
+      token,
+    );
     // Turn into header
     const header_params = [
       `realm=${encodeURIComponent(url)}`,
@@ -39,7 +45,7 @@ export class OAuthHeaders {
         `${k}=${sig_params[k]}`,
       );
     }
-    header_params.push(`oauth_signature=${signature}`);
+    header_params.push(`oauth_signature=${encodeURIComponent(signature)}`);
     return `OAuth ${header_params.join(',')}`;
   }
 
