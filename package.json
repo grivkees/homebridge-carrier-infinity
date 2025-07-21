@@ -66,7 +66,7 @@
     "@types/node": "^20.19.0",
     "@types/object-hash": "^3.0.6",
     "@types/xml2js": "^0.4.14",
-    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^6.21.0",
     "commitizen": "^4.3.1",
     "eslint": "^8.57.1",
