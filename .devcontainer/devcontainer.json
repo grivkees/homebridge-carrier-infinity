@@ -36,6 +36,8 @@
 
   "postCreateCommand": "chmod +x .devcontainer/setup-homebridge.sh && .devcontainer/setup-homebridge.sh",
 
+  "postStartCommand": "chmod +x .devcontainer/start-homebridge.sh && .devcontainer/start-homebridge.sh",
+
   "forwardPorts": [8581],
 
   "portsAttributes": {

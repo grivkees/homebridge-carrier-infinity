@@ -44,19 +44,20 @@ When the codespace is created, the setup script (`.devcontainer/setup-homebridge
 
 ### Getting Started in Codespace
 
-1. **Configure credentials**: Edit `~/.homebridge/config.json` with your Carrier Infinity username/password
-   - Config is pre-created from `.devcontainer/config.json.example` - just update credentials
+1. **Homebridge starts automatically**: On codespace startup, Homebridge and Config UI start automatically via `hb-service`
+   - Access Config UI at http://localhost:8581 (port auto-forwarded)
+   - Default credentials: admin/admin
+   - Logs: `~/.homebridge/homebridge.log`
 
-2. **Start Homebridge**: Run `homebridge` or `homebridge -D` (debug mode)
+2. **Configure credentials**: Edit `~/.homebridge/config.json` with your Carrier Infinity username/password
+   - Config is pre-created from `.devcontainer/config.json.example` - just update credentials
+   - Can also edit via Config UI at http://localhost:8581
 
 3. **Development workflow**:
-   - Terminal 1: `npm run watch` (auto-rebuild on changes)
-   - Terminal 2: `homebridge -D` (restart after rebuilds)
+   - Run `npm run watch` (auto-rebuild on changes)
+   - Restart Homebridge to pick up plugin changes: `pkill homebridge && .devcontainer/start-homebridge.sh`
 
-4. **Access Homebridge UI**: Port 8581 is auto-forwarded
-   - Default credentials: admin/admin
-
-See `.devcontainer/dev-scripts.md` for detailed development commands and debugging tips.
+For complete development environment documentation, commands, and debugging tips, see [.devcontainer/README.md](.devcontainer/README.md).
 
 ### TypeScript Configuration
 - Target: ES2018 (Node 10+)
