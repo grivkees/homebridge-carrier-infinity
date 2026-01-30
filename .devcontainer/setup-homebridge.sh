@@ -3,9 +3,9 @@ set -e
 
 echo "Setting up Homebridge development environment..."
 
-# Install Homebridge globally
-echo "Installing Homebridge..."
-sudo npm install -g --unsafe-perm homebridge homebridge-config-ui-x
+# Install Homebridge and pm2 globally
+echo "Installing Homebridge and pm2..."
+sudo npm install -g --unsafe-perm homebridge homebridge-config-ui-x pm2
 
 # Create Homebridge directory structure
 echo "Creating Homebridge directory structure..."

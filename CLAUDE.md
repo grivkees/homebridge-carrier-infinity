@@ -35,7 +35,7 @@ This repository includes a complete devcontainer configuration that automaticall
 ### Automatic Setup
 
 When the codespace is created, the setup script (`.devcontainer/setup-homebridge.sh`) automatically:
-- Installs Homebridge and Homebridge Config UI X globally
+- Installs Homebridge, Homebridge Config UI X, and pm2 globally
 - Creates `~/.homebridge/` directory structure
 - Copies `.devcontainer/config.json.example` to `~/.homebridge/config.json`
 - Installs project dependencies
@@ -44,10 +44,11 @@ When the codespace is created, the setup script (`.devcontainer/setup-homebridge
 
 ### Getting Started in Codespace
 
-1. **Homebridge starts automatically**: On codespace startup, Homebridge and Config UI start automatically via `hb-service`
+1. **Homebridge starts automatically**: On codespace startup, Homebridge and Config UI start automatically via `hb-service` managed by `pm2`
+   - pm2 keeps the service running persistently (auto-restart on crashes)
    - Access Config UI at http://localhost:8581 (port auto-forwarded)
    - Default credentials: admin/admin
-   - Logs: `~/.homebridge/homebridge.log`
+   - Logs: `pm2 logs homebridge` or `~/.homebridge/homebridge.log`
 
 2. **Configure credentials**: Edit `~/.homebridge/config.json` with your Carrier Infinity username/password
    - Config is pre-created from `.devcontainer/config.json.example` - just update credentials
@@ -55,7 +56,7 @@ When the codespace is created, the setup script (`.devcontainer/setup-homebridge
 
 3. **Development workflow**:
    - Run `npm run watch` (auto-rebuild on changes)
-   - Restart Homebridge to pick up plugin changes: `pkill homebridge && .devcontainer/start-homebridge.sh`
+   - Restart Homebridge to pick up plugin changes: `pm2 restart homebridge`
 
 For complete development environment documentation, commands, and debugging tips, see [.devcontainer/README.md](.devcontainer/README.md).
 

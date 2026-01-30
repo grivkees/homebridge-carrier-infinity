@@ -6,7 +6,7 @@ This directory contains configuration for a complete Homebridge development envi
 
 ### On Container Creation (First Time)
 The setup script ([setup-homebridge.sh](setup-homebridge.sh)) automatically:
-- Installs Homebridge and Homebridge Config UI X globally
+- Installs Homebridge, Homebridge Config UI X, and pm2 globally
 - Creates `~/.homebridge/` directory structure
 - Copies [config.json.example](config.json.example) to `~/.homebridge/config.json`
 - Installs project dependencies
@@ -15,11 +15,12 @@ The setup script ([setup-homebridge.sh](setup-homebridge.sh)) automatically:
 
 ### On Every Container Start
 The startup script ([start-homebridge.sh](start-homebridge.sh)) automatically:
-- Starts Homebridge and Config UI via `hb-service`
+- Starts Homebridge and Config UI via `hb-service` managed by `pm2`
+- pm2 keeps the process running persistently (auto-restart on crashes)
 - Verifies the UI is accessible on port 8581
 - Displays status information
 
-**Result**: When you open the codespace, Homebridge is already running and ready to use!
+**Result**: When you open the codespace, Homebridge is already running under pm2 and will persist!
 
 ## Quick Start
 
@@ -47,7 +48,7 @@ This watches for file changes and rebuilds automatically.
 **After making changes**:
 ```bash
 # Restart Homebridge to pick up plugin changes
-pkill homebridge && .devcontainer/start-homebridge.sh
+pm2 restart homebridge
 ```
 
 ## Configuration Files
@@ -57,6 +58,7 @@ pkill homebridge && .devcontainer/start-homebridge.sh
 | **devcontainer.json** | Main devcontainer configuration |
 | **setup-homebridge.sh** | One-time setup script (runs on container creation) |
 | **start-homebridge.sh** | Startup script (runs on every container start) |
+| **stop-homebridge.sh** | Stop Homebridge (pm2 delete) |
 | **config.json.example** | Template Homebridge configuration |
 
 ### devcontainer.json Features
@@ -69,17 +71,28 @@ pkill homebridge && .devcontainer/start-homebridge.sh
 
 ### Homebridge Management
 ```bash
-# Check if Homebridge is running
-ps aux | grep homebridge
+# Check Homebridge status (managed by pm2)
+pm2 status
 
 # View live logs
+pm2 logs homebridge
+
+# View Homebridge log file
 tail -f ~/.homebridge/homebridge.log
 
 # Restart Homebridge
-pkill homebridge && .devcontainer/start-homebridge.sh
+pm2 restart homebridge
 
-# Stop Homebridge (will restart on next codespace start)
-pkill homebridge
+# Stop Homebridge (will auto-start on next codespace start)
+pm2 stop homebridge
+# Or permanently remove:
+.devcontainer/stop-homebridge.sh
+
+# Start Homebridge manually (if stopped)
+.devcontainer/start-homebridge.sh
+
+# View pm2 process info
+pm2 info homebridge
 ```
 
 ### Plugin Development
@@ -127,10 +140,20 @@ npm run build && npm run relink
 
 **Homebridge not starting**:
 ```bash
+# Check pm2 status
+pm2 status
+
 # Check logs for errors
+pm2 logs homebridge --lines 50
+
+# Or check Homebridge log file
 tail -n 50 ~/.homebridge/homebridge.log
 
-# Start manually
+# Restart via pm2
+pm2 restart homebridge
+
+# Or restart via script (stops and starts fresh)
+pm2 delete homebridge
 .devcontainer/start-homebridge.sh
 ```
 
@@ -166,8 +189,8 @@ The following extensions are automatically installed:
 
 To test different configurations:
 ```bash
-# Stop auto-started instance
-pkill homebridge
+# Stop pm2-managed instance
+pm2 stop homebridge
 
 # Run with custom config
 homebridge -D -U /path/to/custom/homebridge/directory
@@ -175,7 +198,7 @@ homebridge -D -U /path/to/custom/homebridge/directory
 
 ### Debugging with Breakpoints
 
-1. Stop the auto-started Homebridge: `pkill homebridge`
+1. Stop the pm2-managed Homebridge: `pm2 stop homebridge`
 2. Use VS Code's debugger to start Homebridge
 3. Set breakpoints in your plugin code
 
