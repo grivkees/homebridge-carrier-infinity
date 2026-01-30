@@ -20,7 +20,7 @@
     "commit": "git-cz",
     "lint": "eslint src/**.ts --max-warnings=0",
     "watch": "npm run build && npm link && nodemon",
-    "build": "rimraf ./dist && tsc && cp src/api/comodo-aaa-root.pem dist/api/",
+    "build": "rimraf ./dist && tsc",
     "prepublishOnly": "npm run lint && npm run build",
     "test": "jest",
     "xml2ts": "find testdata/*.xml -exec sh -c 'node scripts/xml2ts.ts {} src/api/interface_$(basename {} .xml).ts' \\;"
@@ -50,11 +50,9 @@
   "dependencies": {
     "async-mutex": "^0.5.0",
     "axios": "^1.13.4",
-    "oauth-sign": "^0.9.0",
     "object-hash": "^3.0.0",
     "typescript-memoize": "^1.1.1",
-    "typescript-retry-decorator": "^2.5.3",
-    "xml2js": "^0.6.2"
+    "typescript-retry-decorator": "^2.5.3"
   },
   "devDependencies": {
     "@commitlint/cli": "^20.3.1",
@@ -65,7 +63,6 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.5",
     "@types/object-hash": "^3.0.6",
-    "@types/xml2js": "^0.4.14",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "commitizen": "^4.3.1",

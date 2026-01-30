@@ -4,13 +4,13 @@ import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
 import { ThermostatAccessory } from './accessory_thermostat';
 import { OutdoorTemperatureAccessory } from './accessory_oat';
 import {
-  LocationsModel,
-  SystemModel,
-} from './api/models';
+  LocationsModelGraphQL,
+  SystemModelGraphQL,
+} from './api/models_graphql';
 import { EnvSensorAccessory } from './accessory_envsensor';
 import { BaseAccessory } from './accessory_base';
 import { ComfortActivityAccessory } from './accessory_comfort_activity';
-import { InfinityRestClient } from './api/rest_client';
+import { InfinityGraphQLClient } from './api/graphql_client';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -22,8 +22,8 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
   public readonly accessories: Record<string, BaseAccessory> = {};
 
   // carrier/bryant api
-  public infinity_client: InfinityRestClient;
-  public systems: Record<string, SystemModel> = {};
+  public infinity_client: InfinityGraphQLClient;
+  public systems: Record<string, SystemModelGraphQL> = {};
 
   constructor(
     public readonly log: Logger,
@@ -34,7 +34,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       this.log.error('Username and password do not appear to be set in config. This is not going to work.');
     }
 
-    this.infinity_client = new InfinityRestClient(config['username'], config['password'], this.log);
+    this.infinity_client = new InfinityGraphQLClient(config['username'], config['password'], this.log);
     this.infinity_client.refreshToken().then(); // Speed up init by starting login right away
 
     this.api.on('didFinishLaunching', () => {
@@ -43,13 +43,8 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       });
     });
 
-    // Periodically ping the carrier api to keep it in sync with the thermostat.
-    // This does not keep HomeKit in sync, however, since the plugin does not
-    // know how to push changes to HK yet.
-    // TODO: try to move this into the api class when we have event based
-    setInterval(() => {
-      this.infinity_client.activate();
-    }, 30 * 60 * 1000); // every 30 min
+    // Note: GraphQL API does not require periodic activate() calls
+    // Data is kept fresh via periodic fetch() calls in SystemModel
   }
 
   configureAccessory(accessory: PlatformAccessory): void {
@@ -61,10 +56,10 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     await this.infinity_client.refreshToken();
 
     // Query for systems, start adding accessories
-    const systems = await new LocationsModel(this.infinity_client).getSystems();
+    const systems = await new LocationsModelGraphQL(this.infinity_client).getSystems();
     for (const serialNumber of systems) {
       // Create system api object, and save for later reference
-      const system = new SystemModel(this.infinity_client, serialNumber);
+      const system = new SystemModelGraphQL(this.infinity_client, serialNumber);
       this.systems[serialNumber] = system;
 
       // Add system based accessories
