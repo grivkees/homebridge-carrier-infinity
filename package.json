@@ -20,7 +20,7 @@
     "commit": "git-cz",
     "lint": "eslint src/**.ts --max-warnings=0",
     "watch": "npm run build && npm link && nodemon",
-    "build": "rimraf ./dist && tsc",
+    "build": "rimraf ./dist && tsc && cp src/api/comodo-aaa-root.pem dist/api/",
     "prepublishOnly": "npm run lint && npm run build",
     "test": "jest",
     "xml2ts": "find testdata/*.xml -exec sh -c 'node scripts/xml2ts.ts {} src/api/interface_$(basename {} .xml).ts' \\;"
