@@ -6,6 +6,10 @@ import Axios, { AxiosInstance } from 'axios';
 import { Logger } from 'homebridge';
 import { MemoizeExpiring } from 'typescript-memoize';
 import { Retryable, BackOffPolicy } from 'typescript-retry-decorator';
+import https from 'https';
+import tls from 'tls';
+import fs from 'fs';
+import path from 'path';
 
 export class InfinityRestClient {
   private access_token = '';
@@ -15,12 +19,29 @@ export class InfinityRestClient {
       public username: string,
       private password: string,
       public readonly log: Logger) {
+    // Load Comodo AAA root certificate for Node.js 22+ compatibility
+    // Node.js 22.20+ removed this root CA, but Carrier's API still uses it
+    const comodoRootCert = fs.readFileSync(
+      path.join(__dirname, 'comodo-aaa-root.pem'),
+      'utf8',
+    );
+
+    // Add Comodo cert to the default CA bundle (not replacing it)
+    // This ensures we trust both the default CAs and the Comodo root
+    const ca = [...tls.rootCertificates, comodoRootCert];
+
+    // Create HTTPS agent with augmented CA bundle
+    const httpsAgent = new https.Agent({
+      ca: ca,
+    });
+
     this.axios = Axios.create({
       baseURL: INFINITY_API_BASE_URL,
       headers: {
         featureset: 'CONSUMER_PORTAL',
         Accept: 'application/xml',
       },
+      httpsAgent: httpsAgent,
     });
     // Axios debug logging and error handling
     this.axios.interceptors.response.use(
