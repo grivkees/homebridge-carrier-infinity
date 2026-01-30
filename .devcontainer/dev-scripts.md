@@ -6,19 +6,14 @@ After the devcontainer is created, you'll have a fully configured Homebridge env
 
 ### 1. Configure your credentials
 
-Edit `~/.homebridge/config.json` and add your Carrier Infinity credentials:
+The setup script has already created `~/.homebridge/config.json` from the example config.
+Edit it and add your Carrier Infinity credentials:
 
 ```bash
 nano ~/.homebridge/config.json
 ```
 
-Or copy the example config:
-
-```bash
-cp .devcontainer/config.json.example ~/.homebridge/config.json
-# Then edit with your credentials
-nano ~/.homebridge/config.json
-```
+Update the `username` and `password` fields in the CarrierInfinity platform section.
 
 ### 2. Start Homebridge
 

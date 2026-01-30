@@ -13,12 +13,12 @@ This directory contains the configuration for a GitHub Codespace / VS Code devco
 - **setup-homebridge.sh**: Automated setup script that runs on container creation
   - Installs Homebridge and Homebridge Config UI X globally
   - Creates ~/.homebridge directory structure
-  - Generates default config.json
+  - Copies config.json.example to ~/.homebridge/config.json
   - Builds and links this plugin to Homebridge
 
 - **config.json.example**: Template Homebridge configuration
   - Includes the Carrier Infinity platform with all options
-  - Copy to ~/.homebridge/config.json and add your credentials
+  - Automatically copied to ~/.homebridge/config.json by setup script
 
 - **dev-scripts.md**: Development workflow documentation
   - Quick start guide
@@ -31,9 +31,8 @@ This directory contains the configuration for a GitHub Codespace / VS Code devco
 
 1. Open this repository in a Codespace or devcontainer
 2. Wait for the automatic setup to complete (~2-3 minutes)
-3. Copy the example config: `cp .devcontainer/config.json.example ~/.homebridge/config.json`
-4. Edit ~/.homebridge/config.json with your Carrier username/password
-5. Start Homebridge: `homebridge -D`
+3. Edit ~/.homebridge/config.json with your Carrier username/password
+4. Start Homebridge: `homebridge -D`
 
 ### Development Workflow
 

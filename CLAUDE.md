@@ -37,7 +37,7 @@ This repository includes a complete devcontainer configuration that automaticall
 When the codespace is created, the setup script (`.devcontainer/setup-homebridge.sh`) automatically:
 - Installs Homebridge and Homebridge Config UI X globally
 - Creates `~/.homebridge/` directory structure
-- Generates a default config.json
+- Copies `.devcontainer/config.json.example` to `~/.homebridge/config.json`
 - Installs project dependencies
 - Builds the plugin
 - Symlinks the plugin to `~/.homebridge/node_modules/`
@@ -45,7 +45,7 @@ When the codespace is created, the setup script (`.devcontainer/setup-homebridge
 ### Getting Started in Codespace
 
 1. **Configure credentials**: Edit `~/.homebridge/config.json` with your Carrier Infinity username/password
-   - Example config available at `.devcontainer/config.json.example`
+   - Config is pre-created from `.devcontainer/config.json.example` - just update credentials
 
 2. **Start Homebridge**: Run `homebridge` or `homebridge -D` (debug mode)
 

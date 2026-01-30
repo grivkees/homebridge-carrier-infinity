@@ -13,25 +13,8 @@ mkdir -p ~/.homebridge
 
 # Create default config if it doesn't exist
 if [ ! -f ~/.homebridge/config.json ]; then
-    echo "Creating default Homebridge config..."
-    cat > ~/.homebridge/config.json <<'EOF'
-{
-    "bridge": {
-        "name": "Homebridge Dev",
-        "username": "CC:22:3D:E3:CE:30",
-        "port": 51826,
-        "pin": "031-45-154"
-    },
-    "accessories": [],
-    "platforms": [
-        {
-            "name": "Config",
-            "port": 8581,
-            "platform": "config"
-        }
-    ]
-}
-EOF
+    echo "Creating Homebridge config from example..."
+    cp .devcontainer/config.json.example ~/.homebridge/config.json
 fi
 
 # Install project dependencies
