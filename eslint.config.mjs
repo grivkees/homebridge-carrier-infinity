@@ -1,0 +1,81 @@
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import spellcheck from 'eslint-plugin-spellcheck';
+
+export default tseslint.config(
+  {
+    ignores: ['dist/**', 'node_modules/**'],
+  },
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
+  {
+    files: ['src/**/*.ts'],
+    plugins: {
+      spellcheck,
+    },
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        ecmaVersion: 2018,
+        sourceType: 'module',
+      },
+    },
+    rules: {
+      'quotes': ['warn', 'single'],
+      'indent': ['warn', 2, { 'SwitchCase': 1 }],
+      'semi': ['off'],
+      'spellcheck/spell-checker': [
+        'warn',
+        {
+          'strings': false,
+          'skipWords': [
+            'axios',
+            'bryant',
+            'cdata',
+            'cfgem',
+            'clsp',
+            'cmode',
+            'ctype',
+            'damperposition',
+            'deadband',
+            'Fanv',
+            'filtrlvl',
+            'featureset',
+            'Homebridge',
+            'htsp',
+            'mutex',
+            'rh',
+            'Retryable',
+            'setpoint',
+            'setpoints',
+            'sig',
+            'svalue',
+            'oauth',
+            'unregister',
+            'vacmaxt',
+            'vacmint',
+            'vacfan',
+            'xml',
+            'xml2js',
+            'zoneconditioning',
+          ],
+        },
+      ],
+      'comma-dangle': ['warn', 'always-multiline'],
+      'dot-notation': 'off',
+      'eqeqeq': 'warn',
+      'curly': ['warn', 'all'],
+      'brace-style': ['warn'],
+      'prefer-arrow-callback': ['warn'],
+      'max-len': ['warn', 140],
+      'no-console': ['warn'],
+      'comma-spacing': ['error'],
+      'no-multi-spaces': ['warn', { 'ignoreEOLComments': true }],
+      'no-trailing-spaces': ['warn'],
+      'lines-between-class-members': ['warn', 'always', { 'exceptAfterSingleLine': true }],
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/explicit-module-boundary-types': 'off',
+    },
+  },
+);
