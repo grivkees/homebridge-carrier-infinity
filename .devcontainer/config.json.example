@@ -1,0 +1,27 @@
+{
+    "bridge": {
+        "name": "Homebridge Dev",
+        "username": "CC:22:3D:E3:CE:30",
+        "port": 51826,
+        "pin": "031-45-154"
+    },
+    "accessories": [],
+    "platforms": [
+        {
+            "name": "Config",
+            "port": 8581,
+            "platform": "config"
+        },
+        {
+            "platform": "CarrierInfinity",
+            "name": "Carrier Infinity",
+            "username": "YOUR_CARRIER_USERNAME",
+            "password": "YOUR_CARRIER_PASSWORD",
+            "holdBehavior": "forever",
+            "showOutdoorTemperatureSensor": false,
+            "showFanControl": false,
+            "showIndoorHumiditySensors": false,
+            "showZoneComfortActivityControls": false
+        }
+    ]
+}

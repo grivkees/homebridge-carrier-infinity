@@ -28,6 +28,36 @@ npm run relink
 npm run xml2ts
 ```
 
+## Codespace/Devcontainer Development Environment
+
+This repository includes a complete devcontainer configuration that automatically sets up a Homebridge development environment.
+
+### Automatic Setup
+
+When the codespace is created, the setup script (`.devcontainer/setup-homebridge.sh`) automatically:
+- Installs Homebridge and Homebridge Config UI X globally
+- Creates `~/.homebridge/` directory structure
+- Generates a default config.json
+- Installs project dependencies
+- Builds the plugin
+- Symlinks the plugin to `~/.homebridge/node_modules/`
+
+### Getting Started in Codespace
+
+1. **Configure credentials**: Edit `~/.homebridge/config.json` with your Carrier Infinity username/password
+   - Example config available at `.devcontainer/config.json.example`
+
+2. **Start Homebridge**: Run `homebridge` or `homebridge -D` (debug mode)
+
+3. **Development workflow**:
+   - Terminal 1: `npm run watch` (auto-rebuild on changes)
+   - Terminal 2: `homebridge -D` (restart after rebuilds)
+
+4. **Access Homebridge UI**: Port 8581 is auto-forwarded
+   - Default credentials: admin/admin
+
+See `.devcontainer/dev-scripts.md` for detailed development commands and debugging tips.
+
 ### TypeScript Configuration
 - Target: ES2018 (Node 10+)
 - Output: `dist/` directory

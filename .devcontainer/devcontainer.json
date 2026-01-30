@@ -34,7 +34,16 @@
     }
   },
 
-  "postCreateCommand": "npm install",
+  "postCreateCommand": "chmod +x .devcontainer/setup-homebridge.sh && .devcontainer/setup-homebridge.sh",
+
+  "forwardPorts": [8581],
+
+  "portsAttributes": {
+    "8581": {
+      "label": "Homebridge UI",
+      "onAutoForward": "notify"
+    }
+  },
 
   "remoteUser": "node",
 
