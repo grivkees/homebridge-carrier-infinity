@@ -76,29 +76,33 @@ The plugin registers itself in [src/index.ts](src/index.ts) and implements the H
 
 #### 1. Platform ([src/platform.ts](src/platform.ts))
 - Entry point that discovers systems and zones after Homebridge launches
-- Maintains `infinity_client` (REST API client) and `systems` (indexed by serial number)
-- Periodically activates the API every 30 minutes to maintain connection
+- Maintains `infinity_client` (GraphQL API client) and `systems` (indexed by serial number)
 - Creates accessories based on config options (outdoor temp sensor, humidity sensors, etc.)
 
 #### 2. API Layer ([src/api/](src/api/))
-- **InfinityRestClient** ([src/api/rest_client.ts](src/api/rest_client.ts)): OAuth-authenticated Axios client
-  - Handles authentication with username/password
-  - Automatic OAuth header injection via interceptor
-  - Token refresh with 24hr memoization
-  - Activation endpoint called every minute (with memoization)
+- **InfinityGraphQLClient** ([src/api/graphql_client.ts](src/api/graphql_client.ts)): OAuth 2.0 authenticated GraphQL client
+  - Handles authentication via Okta with username/password
+  - Automatic Bearer token injection via interceptor
+  - Token refresh with 24hr memoization (via Okta or assistedLogin mutation)
+  - No activation endpoint needed (simplified from old REST API)
 
-- **Models** ([src/api/models.ts](src/api/models.ts)): BaseModel and specific models (LocationsModel, SystemModel, etc.)
+- **GraphQL Operations** ([src/api/graphql_operations.ts](src/api/graphql_operations.ts)): GraphQL queries and mutations
+  - `GET_INFINITY_SYSTEMS`: Single query fetches profile, status, and config together (replaces 3 REST calls)
+  - `UPDATE_INFINITY_CONFIG`: System-level configuration mutations
+  - `UPDATE_INFINITY_ZONE_ACTIVITY`: Zone activity and setpoint mutations
+  - `UPDATE_INFINITY_ZONE_CONFIG`: Zone hold and schedule mutations
+
+- **Models** ([src/api/models_graphql.ts](src/api/models_graphql.ts)): GraphQL-based models with facade pattern
+  - `UnifiedSystemModel` fetches all data (profile + status + config) via single GraphQL query
+  - `SystemProfileModel`, `SystemStatusModel`, `SystemConfigModel` are facades that maintain backward compatibility
   - `BaseModel` provides fetch/push pattern with mutex locking to prevent race conditions
   - Hash-based change detection (only pushes if data actually changed)
   - 10-second memoization on fetch operations
-  - XML parsing via xml2js
-  - Models include: `LocationsModel`, `SystemModel` with nested `ConfigModel`, `ProfileModel`, `StatusModel`
+  - JSON parsing (native JavaScript objects)
 
-- **Interface Files**: TypeScript interfaces auto-generated from XML samples in `testdata/` using the `xml2ts` script
-  - [src/api/interface_config.ts](src/api/interface_config.ts)
-  - [src/api/interface_profile.ts](src/api/interface_profile.ts)
-  - [src/api/interface_status.ts](src/api/interface_status.ts)
-  - [src/api/interface_locations.ts](src/api/interface_locations.ts)
+- **Interface Files**: TypeScript interfaces for GraphQL API responses
+  - [src/api/interface_graphql_system.ts](src/api/interface_graphql_system.ts): System, profile, status, and config types
+  - [src/api/interface_graphql_mutations.ts](src/api/interface_graphql_mutations.ts): Mutation input and response types
 
 #### 3. Accessories ([src/accessory_*.ts](src/))
 All accessories extend `BaseAccessory` ([src/accessory_base.ts](src/accessory_base.ts)):
@@ -128,7 +132,7 @@ The plugin uses a wrapper pattern to bind HomeKit characteristics to API data:
 ### Key Patterns
 
 #### OAuth Authentication
-The API uses OAuth 1.0 with custom headers. See [src/api/oauth.ts](src/api/oauth.ts) for signature generation and [src/settings.ts](src/settings.ts) for consumer key/secret.
+The API uses OAuth 2.0 via Okta with Bearer tokens. See [src/api/oauth2.ts](src/api/oauth2.ts) for token injection and [src/settings.ts](src/settings.ts) for OAuth endpoints and client ID. Authentication is handled via the `assistedLogin` GraphQL mutation or Okta token refresh endpoint.
 
 #### Memoization & Retry Decorators
 - `@MemoizeExpiring(milliseconds)`: Caches method results for specified duration
@@ -144,9 +148,11 @@ await tryAcquire(this.write_lock).runExclusive(async () => {
 ```
 
 #### Data Flow
-1. **Read**: Characteristic getter → Model.fetch() → API GET → XML parse → return value
-2. **Write**: Characteristic setter → batch changes → Model.push() → XML build → API PUT
+1. **Read**: Characteristic getter → Model.fetch() → GraphQL query → JSON parse → return value
+2. **Write**: Characteristic setter → batch changes → Model.push() → GraphQL mutation → JSON input
 3. **Updates**: Periodic polling + hash comparison triggers characteristic updates via subscription pattern
+
+**Note**: The GraphQL API combines profile, status, and config data in a single query, reducing network overhead by 66% compared to the old REST API (1 query vs 3 separate calls).
 
 #### Hold Behavior
 The plugin supports multiple thermostat hold modes (forever, until next activity, for X hours, until time X) configured via `holdBehavior` and `holdArgument` in config.
@@ -174,7 +180,7 @@ The plugin supports multiple thermostat hold modes (forever, until next activity
 
 ## Important Notes
 
-- The API expects `activate()` calls regularly (~1 min), though more frequent doesn't help
 - Changes from HomeKit can take 1-2 minutes to reach the physical thermostat due to polling architecture
 - Node version requirement: >= 18
 - Homebridge version: >= 1.2 or ^2.0.0-beta.0
+- The plugin uses the new GraphQL API (OAuth 2.0, JSON) which replaced the old REST API (OAuth 1.0, XML)

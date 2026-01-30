@@ -1,5 +1,5 @@
 import { ACTIVITY, SUBSCRIPTION } from './api/constants';
-import { SystemModel } from './api/models';
+import { SystemModelGraphQL } from './api/models_graphql';
 import { Service, Characteristic, Logger } from 'homebridge';
 import { CharacteristicValue, UnknownContext, WithUUID } from 'homebridge';
 
@@ -13,7 +13,7 @@ import { PrefixLogger } from './helper_logging';
 class Wrapper {
   public readonly Service: typeof Service = this.platform.api.hap.Service;
   public readonly Characteristic: typeof Characteristic = this.platform.api.hap.Characteristic;
-  protected readonly system: SystemModel = this.platform.systems[this.context.serialNumber];
+  protected readonly system: SystemModelGraphQL = this.platform.systems[this.context.serialNumber];
   protected readonly log: Logger = new PrefixLogger(this.system.log, this.context.name);
 
   constructor(
