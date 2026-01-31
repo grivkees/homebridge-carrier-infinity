@@ -17,6 +17,12 @@ if [ ! -f ~/.homebridge/config.json ]; then
     cp .devcontainer/config.json.example ~/.homebridge/config.json
 fi
 
+# Create debug mode config if it doesn't exist
+if [ ! -f ~/.homebridge/.uix-hb-service-homebridge-startup.json ]; then
+    echo "Creating Homebridge service config from example..."
+    cp .devcontainer/.uix-hb-service-homebridge-startup.json.example ~/.homebridge/.uix-hb-service-homebridge-startup.json
+fi
+
 # Install project dependencies
 echo "Installing project dependencies..."
 npm install
