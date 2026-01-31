@@ -10,7 +10,8 @@
         {
             "name": "Config",
             "port": 8581,
-            "platform": "config"
+            "platform": "config",
+            "tempUnits": "f"
         },
         {
             "platform": "CarrierInfinity",

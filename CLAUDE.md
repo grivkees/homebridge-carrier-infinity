@@ -37,7 +37,8 @@ This repository includes a complete devcontainer configuration that automaticall
 When the codespace is created, the setup script (`.devcontainer/setup-homebridge.sh`) automatically:
 - Installs Homebridge, Homebridge Config UI X, and pm2 globally
 - Creates `~/.homebridge/` directory structure
-- Copies `.devcontainer/config.json.example` to `~/.homebridge/config.json`
+- Copies `.devcontainer/config.json.example` to `~/.homebridge/config.json` (Fahrenheit display)
+- Copies `.devcontainer/.uix-hb-service-homebridge-startup.json.example` (debug mode enabled)
 - Installs project dependencies
 - Builds the plugin
 - Symlinks the plugin to `~/.homebridge/node_modules/`
