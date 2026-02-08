@@ -625,15 +625,6 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
     await super.fetch();
   }
 
-  // Keys to ignore when comparing config hashes (same as UnifiedSystemModelGraphQL)
-  private static readonly HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime', 'etag']);
-
-  private hashConfig(config: object): string {
-    return hash(config, {
-      excludeKeys: (key) => SystemConfigModelGraphQL.HASH_IGNORE_KEYS.has(key),
-    });
-  }
-
   private async push(): Promise<void> {
     // Emit local mutation event for immediate HK updates
     this.events.emit(SUBSCRIPTION.CONFIG_MUTATE);
@@ -656,34 +647,18 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
         const localConfig = JSON.parse(JSON.stringify(this.unified.getConfig()));
         const status = this.unified.getStatus();
 
+        const executedInputs: (InfinityConfigInput | InfinityZoneActivityInput | InfinityZoneConfigInput)[] = [];
         while (this.mutations.length > 0) {
           const mutation = this.mutations.shift();
           if (mutation) {
             const input = mutation(localConfig, status);
             await this.executeMutation(input);
-
-            // Update local config with the changes we just sent
-            // so subsequent mutations see the pending changes
-            const configInput = input as InfinityConfigInput;
-            if (configInput.humidityHome) {
-              localConfig.humidityHome = { ...localConfig.humidityHome, ...configInput.humidityHome };
-            }
-            if (configInput.humidityAway) {
-              localConfig.humidityAway = { ...localConfig.humidityAway, ...configInput.humidityAway };
-            }
-            if (configInput.humidityVacation) {
-              localConfig.humidityVacation = { ...localConfig.humidityVacation, ...configInput.humidityVacation };
-            }
-            if (configInput.mode !== undefined) {
-              localConfig.mode = configInput.mode;
-            }
+            this.applyMutationToLocalConfig(input, localConfig);
+            executedInputs.push(input);
           }
         }
 
         this.log.info('... pushing changes complete.');
-
-        // Compute hash of expected config state after all mutations
-        const expectedHash = this.hashConfig(localConfig);
 
         // Wait before checking propagation (like the old REST API code)
         await new Promise(r => setTimeout(r, 5000));
@@ -694,12 +669,11 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
           return;
         }
 
-        // Fetch fresh data and compare hashes to confirm propagation
+        // Fetch fresh data and verify each mutation's fields landed
         await this.unified.forceFreshFetch();
         const actualConfig = this.unified.getConfig();
-        const actualHash = this.hashConfig(actualConfig);
 
-        if (expectedHash === actualHash) {
+        if (executedInputs.every(input => this.verifyMutationLanded(input, actualConfig))) {
           this.log.debug('Successful propagation to carrier api is confirmed.');
         } else {
           this.log.warn('Changes do not (yet?) appear to have propagated to the carrier api.');
@@ -748,6 +722,75 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
     } else {
       this.log.error('Unknown mutation type:', input);
     }
+  }
+
+  private static readonly MUTATION_META_KEYS = new Set(['serial', 'zoneId', 'activityType']);
+
+  /**
+   * Resolve the target object in config that a mutation input applies to.
+   */
+  private resolveMutationTarget(
+    input: InfinityConfigInput | InfinityZoneActivityInput | InfinityZoneConfigInput,
+    config: InfinitySystemConfig,
+  ): Record<string, unknown> | undefined {
+    if ('activityType' in input && 'zoneId' in input) {
+      const zone = config.zones.find(z => z.id === input.zoneId);
+      return zone?.activities.find(a => a.type === input.activityType) as unknown as Record<string, unknown>;
+    } else if ('zoneId' in input) {
+      return config.zones.find(z => z.id === input.zoneId) as unknown as Record<string, unknown>;
+    }
+    return config as unknown as Record<string, unknown>;
+  }
+
+  /**
+   * Apply mutation input fields back to localConfig so subsequent batched
+   * mutations see the pending changes instead of stale values.
+   */
+  private applyMutationToLocalConfig(
+    input: InfinityConfigInput | InfinityZoneActivityInput | InfinityZoneConfigInput,
+    config: InfinitySystemConfig,
+  ): void {
+    const target = this.resolveMutationTarget(input, config);
+    if (!target) return;
+    for (const [key, value] of Object.entries(input)) {
+      if (!SystemConfigModelGraphQL.MUTATION_META_KEYS.has(key) && value !== undefined) {
+        target[key] = value;
+      }
+    }
+  }
+
+  /**
+   * Verify that a mutation's fields are reflected in the actual config,
+   * using numeric comparison for values like "68.0" vs "68".
+   */
+  private verifyMutationLanded(
+    input: InfinityConfigInput | InfinityZoneActivityInput | InfinityZoneConfigInput,
+    config: InfinitySystemConfig,
+  ): boolean {
+    const target = this.resolveMutationTarget(input, config);
+    if (!target) return false;
+    for (const [key, expected] of Object.entries(input)) {
+      if (SystemConfigModelGraphQL.MUTATION_META_KEYS.has(key) || expected === undefined) continue;
+      const actual = target[key];
+      if (typeof expected === 'object' && expected !== null) {
+        // Nested objects (e.g. humidityHome): check each sub-field
+        const actualObj = (actual || {}) as Record<string, unknown>;
+        for (const [subKey, subExpected] of Object.entries(expected as Record<string, unknown>)) {
+          if (subExpected !== undefined && !this.valuesMatch(subExpected, actualObj[subKey])) return false;
+        }
+      } else if (!this.valuesMatch(expected, actual)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private valuesMatch(expected: unknown, actual: unknown): boolean {
+    if (expected === actual) return true;
+    // Numeric comparison handles format differences like "68.0" vs "68"
+    const numExpected = Number(expected);
+    const numActual = Number(actual);
+    return !isNaN(numExpected) && !isNaN(numActual) && numExpected === numActual;
   }
 
   async setMode(mode: string): Promise<void> {
