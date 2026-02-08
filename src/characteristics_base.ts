@@ -10,6 +10,22 @@ import { PrefixLogger } from './helper_logging';
 * Helpers to add handlers to the HAP Service and Characteristic objects.
 */
 
+// Safely set props on a characteristic, initializing the value first if it
+// would be out of bounds for the new min/max constraints.
+export function safeSetProps(
+  characteristic: Characteristic,
+  props: Record<string, number>,
+  defaultValue?: CharacteristicValue,
+): void {
+  const val = characteristic.value as number;
+  const min = props.minValue;
+  const max = props.maxValue;
+  if ((min !== undefined && val < min) || (max !== undefined && val > max)) {
+    characteristic.updateValue(defaultValue ?? min ?? max);
+  }
+  characteristic.setProps(props);
+}
+
 class Wrapper {
   public readonly Service: typeof Service = this.platform.api.hap.Service;
   public readonly Characteristic: typeof Characteristic = this.platform.api.hap.Characteristic;
@@ -51,7 +67,7 @@ export abstract class CharacteristicWrapper extends Wrapper {
   wrap(service: Service): void {
     const characteristic = service.getCharacteristic(this.ctype);
     if (this.props) {
-      characteristic.setProps(this.props);
+      safeSetProps(characteristic, this.props as Record<string, number>, this.default_value ?? undefined);
     }
     if (this.get) {
       // This magic callback schedules another async callback to actually fetch

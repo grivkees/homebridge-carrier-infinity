@@ -6,6 +6,7 @@ import { FilterService } from './characteristics_filter';
 import {
   convertSystemTemp2CharTemp,
 } from './helpers';
+import { safeSetProps } from './characteristics_base';
 import { ThermostatRHService, HumidifierService } from './characteristics_humidity';
 import { FanService } from './characteristics_fan';
 import { ACService } from './characteristics_ac';
@@ -42,9 +43,9 @@ export class ThermostatAccessory extends BaseAccessory {
         minValue: Number(convertSystemTemp2CharTemp(temp_bounds[0], await this.system.config.getUnits())),
         maxValue: Number(convertSystemTemp2CharTemp(temp_bounds[1], await this.system.config.getUnits())),
       };
-      this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature).setProps(bound_props);
-      this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature).setProps(bound_props);
-      this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature).setProps(bound_props);
+      safeSetProps(this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature), bound_props);
+      safeSetProps(this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature), bound_props);
+      safeSetProps(this.service.getCharacteristic(this.platform.Characteristic.HeatingThresholdTemperature), bound_props);
       // setting name explicitly is needed to not lose the word 'thermostat'
       this.service.setCharacteristic(this.platform.Characteristic.Name, this.accessory.displayName);
     });
