@@ -198,6 +198,12 @@ class UnifiedSystemModelGraphQL extends BaseModelGraphQL {
   getConfig(): InfinitySystemConfig {
     return this.data_object.config;
   }
+
+  // Public method to force a fresh fetch, bypassing memoization
+  // Used for propagation checking where we need actual current values
+  async forceFreshFetch(): Promise<void> {
+    await this.forceFetch();
+  }
 }
 
 /**
@@ -619,6 +625,15 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
     await super.fetch();
   }
 
+  // Keys to ignore when comparing config hashes (same as UnifiedSystemModelGraphQL)
+  private static readonly HASH_IGNORE_KEYS = new Set<string>(['timestamp', 'localTime', 'etag']);
+
+  private hashConfig(config: object): string {
+    return hash(config, {
+      excludeKeys: (key) => SystemConfigModelGraphQL.HASH_IGNORE_KEYS.has(key),
+    });
+  }
+
   private async push(): Promise<void> {
     // Emit local mutation event for immediate HK updates
     this.events.emit(SUBSCRIPTION.CONFIG_MUTATE);
@@ -636,10 +651,8 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
           return;
         }
 
-        // Fetch config once, then apply all mutations to a local copy
-        // This prevents later mutations from overwriting earlier ones
-        // (API may not have propagated changes yet)
-        await this.unified.fetch();
+        // Fetch fresh config to ensure we don't overwrite other data
+        await this.unified.forceFreshFetch();
         const localConfig = JSON.parse(JSON.stringify(this.unified.getConfig()));
         const status = this.unified.getStatus();
 
@@ -661,21 +674,35 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
             if (configInput.humidityVacation) {
               localConfig.humidityVacation = { ...localConfig.humidityVacation, ...configInput.humidityVacation };
             }
+            if (configInput.mode !== undefined) {
+              localConfig.mode = configInput.mode;
+            }
           }
         }
 
         this.log.info('... pushing changes complete.');
 
-        // Wait for propagation
+        // Compute hash of expected config state after all mutations
+        const expectedHash = this.hashConfig(localConfig);
+
+        // Wait before checking propagation (like the old REST API code)
         await new Promise(r => setTimeout(r, 5000));
 
-        // Refresh to confirm
-        if (this.mutations.length === 0) {
-          await this.unified.fetch();
-          const newConfig = this.unified.getConfig();
+        // If new mutations came in during push, skip the confirmation check
+        // The next push will handle refreshing from remote API state
+        if (this.mutations.length > 0) {
+          return;
+        }
+
+        // Fetch fresh data and compare hashes to confirm propagation
+        await this.unified.forceFreshFetch();
+        const actualConfig = this.unified.getConfig();
+        const actualHash = this.hashConfig(actualConfig);
+
+        if (expectedHash === actualHash) {
           this.log.debug('Successful propagation to carrier api is confirmed.');
-          this.log.debug('[HUMIDITY DEBUG] Config AFTER push - humidityHome:', JSON.stringify(newConfig?.humidityHome));
-          this.log.debug('[HUMIDITY DEBUG] Config AFTER push - humidityAway:', JSON.stringify(newConfig?.humidityAway));
+        } else {
+          this.log.warn('Changes do not (yet?) appear to have propagated to the carrier api.');
         }
       });
     } catch (e) {
