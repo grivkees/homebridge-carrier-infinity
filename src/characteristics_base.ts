@@ -59,9 +59,15 @@ export abstract class CharacteristicWrapper extends Wrapper {
       // an async callback.
       const callback = () => {
         // Schedule async update to HK characteristic.
+        // Wrapped in try/catch to prevent unhandled rejections from crashing
+        // Homebridge when the API is unavailable (#397)
         process.nextTick(async () => {
-          if (this.get) {
-            characteristic.updateValue(await this.get());
+          try {
+            if (this.get) {
+              characteristic.updateValue(await this.get());
+            }
+          } catch (e) {
+            this.log.debug('Failed to update characteristic:', String(e));
           }
         });
         // Return immediately with the current, stale value. This is needed for
@@ -125,6 +131,8 @@ export class AccessoryInformation extends Wrapper {
         .setCharacteristic(this.Characteristic.SerialNumber, this.system.serialNumber)
         .setCharacteristic(this.Characteristic.Manufacturer, `${await this.system.profile.getBrand()} Home`)
         .setCharacteristic(this.Characteristic.Model, await this.system.profile.getModel());
+    }).catch(e => {
+      this.log.debug('Failed to set accessory information:', String(e));
     });
   }
 }
