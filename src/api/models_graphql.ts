@@ -62,6 +62,12 @@ abstract class BaseModelGraphQL {
   protected write_lock: Mutex;
   protected log: Logger = new PrefixLogger(this.graphql_client.log, 'API');
 
+  // Exponential backoff state for API errors (#397)
+  private consecutiveFailures = 0;
+  private backoffUntil = 0;
+  private static readonly BACKOFF_BASE_MS = 30 * 1000;         // 30 seconds initial backoff
+  private static readonly BACKOFF_MAX_MS = 10 * 60 * 1000;     // 10 minutes max backoff
+
   constructor(
     protected readonly graphql_client: InfinityGraphQLClient,
   ) {
@@ -77,21 +83,48 @@ abstract class BaseModelGraphQL {
     );
   }
 
+  /** Whether initial data has been successfully loaded */
+  get isDataAvailable(): boolean {
+    return this.data_object !== undefined;
+  }
+
   @MemoizeExpiring(10 * 1000)
   async fetch(): Promise<void> {
+    // Exponential backoff: skip fetch if still in backoff period (#397)
+    if (Date.now() < this.backoffUntil) {
+      this.log.debug(`Backing off API calls for ${Math.round((this.backoffUntil - Date.now()) / 1000)}s more`);
+      return;
+    }
+
     // If push is ongoing, skip this update fetch. The push will do a fetch.
     try {
       await tryAcquire(this.write_lock).runExclusive(async () => {
         await this.forceFetch();
       });
+      // Success: reset backoff
+      if (this.consecutiveFailures > 0) {
+        this.log.info('API connection restored after backoff.');
+      }
+      this.consecutiveFailures = 0;
+      this.backoffUntil = 0;
     } catch (e) {
       if (e === E_ALREADY_LOCKED) {
         return;
       } else if (e === E_TIMEOUT || e === E_CANCELED) {
         this.log.error(`Deadlock on fetch ${e}. Report bug: https://bit.ly/3igbU7D`);
       } else {
+        this.consecutiveFailures++;
+        const backoffMs = Math.min(
+          BaseModelGraphQL.BACKOFF_BASE_MS * Math.pow(2, this.consecutiveFailures - 1),
+          BaseModelGraphQL.BACKOFF_MAX_MS,
+        );
+        this.backoffUntil = Date.now() + backoffMs;
         const errorMessage = Axios.isAxiosError(e) ? (e as AxiosError).message : String(e);
-        this.log.error('Failed to fetch updates: ', errorMessage);
+        this.log.error(
+          `Failed to fetch updates (attempt ${this.consecutiveFailures},` +
+          ` backing off ${Math.round(backoffMs / 1000)}s): `,
+          errorMessage,
+        );
       }
     }
   }
@@ -118,6 +151,9 @@ export class LocationsModelGraphQL extends BaseModelGraphQL {
 
   async getSystems(): Promise<string[]> {
     await this.fetch();
+    if (!this.isDataAvailable) {
+      throw new Error('Could not retrieve systems (API has not responded successfully)');
+    }
     const systems: string[] = [];
 
     // Extract serial numbers from user locations
@@ -188,14 +224,23 @@ class UnifiedSystemModelGraphQL extends BaseModelGraphQL {
 
   // Direct accessors for internal use by facade models
   getProfile(): InfinitySystemProfile {
+    if (!this.isDataAvailable) {
+      throw new Error('System data not yet available (API has not responded successfully)');
+    }
     return this.data_object.profile;
   }
 
   getStatus(): InfinitySystemStatus {
+    if (!this.isDataAvailable) {
+      throw new Error('System data not yet available (API has not responded successfully)');
+    }
     return this.data_object.status;
   }
 
   getConfig(): InfinitySystemConfig {
+    if (!this.isDataAvailable) {
+      throw new Error('System data not yet available (API has not responded successfully)');
+    }
     return this.data_object.config;
   }
 
