@@ -150,7 +150,17 @@
           "type": "help",
           "helpvalue": "<em class='primary-text'>If your account has multiple locations/systems, you can limit which systems are exposed to HomeKit. Leave empty to expose all systems. Serial numbers are logged during plugin startup.</em>"
         },
-        "systems"
+        {
+          "key": "systems",
+          "type": "array",
+          "buttonText": "Add Serial Number",
+          "items": [
+            {
+              "key": "systems[]",
+              "placeholder": "e.g. 123456AB"
+            }
+          ]
+        }
       ]
     }
   ]
