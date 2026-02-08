@@ -27,6 +27,12 @@ export const STATUS = {
   OFF: 'off',
 };
 
+export const HEAT_SOURCE = {
+  SYSTEM: 'system',
+  IDU_ONLY: 'idu only',
+  ODU_ONLY: 'odu only',
+};
+
 export const SUBSCRIPTION = {
   CONFIG: 'updated_config',
   STATUS: 'updated_status',

@@ -411,6 +411,11 @@ export class SystemConfigModelReadOnlyGraphQL {
     return this.unified.getConfig().mode;
   }
 
+  async getHeatSource(): Promise<string> {
+    await this.fetch();
+    return this.unified.getConfig().heatsource;
+  }
+
   protected getZone(zone: string): InfinityZoneConfig {
     const zones = this.unified.getConfig().zones;
     const found = zones.find(z => z.id === zone.toString());
@@ -677,6 +682,9 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
             if (configInput.mode !== undefined) {
               localConfig.mode = configInput.mode;
             }
+            if (configInput.heatsource !== undefined) {
+              localConfig.heatsource = configInput.heatsource;
+            }
           }
         }
 
@@ -720,6 +728,7 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
   private async executeMutation(input: any): Promise<void> {
     // Determine mutation type based on input properties
     const isSystemConfig = 'mode' in input ||
+      'heatsource' in input ||
       'humidityHome' in input ||
       'humidityAway' in input ||
       'humidityVacation' in input;
@@ -757,6 +766,20 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
       return {
         serial: this.unified.serialNumber,
         mode,
+      } as InfinityConfigInput;
+    };
+
+    this.mutations.push(m);
+    this.push();
+  }
+
+  async setHeatSource(heatsource: string): Promise<void> {
+    this.log.debug('Setting heat source to ' + heatsource);
+
+    const m: ConfigMutationGraphQL = () => {
+      return {
+        serial: this.unified.serialNumber,
+        heatsource,
       } as InfinityConfigInput;
     };
 

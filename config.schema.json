@@ -67,6 +67,12 @@
         "type": "boolean",
         "default": false,
         "required": true
+      },
+      "showHeatSourceControl": {
+        "title": "Show Heat Source Control",
+        "type": "boolean",
+        "default": false,
+        "required": true
       }
     }
   },
@@ -115,7 +121,12 @@
           "type": "help",
           "helpvalue": "<h5>Humidity Control</h5><em class='primary-text'>Show humidifier and dehumidifier controls for systems with built-in humidity management. Allows you to view and set humidity targets.</em>"
         },
-        "showHumidifierDehumidifier"
+        "showHumidifierDehumidifier",
+        {
+          "type": "help",
+          "helpvalue": "<h5>Heat Source Control</h5><em class='primary-text'>For dual heat source systems (gas + heat pump), show switches to select the heat source: System In Control, Gas Heat Only, or Heat Pump Only.</em>"
+        },
+        "showHeatSourceControl"
       ]
     },
     {

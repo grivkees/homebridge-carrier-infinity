@@ -10,6 +10,7 @@ import {
 import { EnvSensorAccessory } from './accessory_envsensor';
 import { BaseAccessory } from './accessory_base';
 import { ComfortActivityAccessory } from './accessory_comfort_activity';
+import { HeatSourceAccessory } from './accessory_heat_source';
 import { InfinityGraphQLClient } from './api/graphql_client';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
@@ -70,6 +71,13 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
         new OutdoorTemperatureAccessory(
           this,
           {...context_system, name: 'Outdoor Temperature'},
+        );
+      }
+      // -> System Accessory: Heat Source Control
+      if (this.config['showHeatSourceControl']) {
+        new HeatSourceAccessory(
+          this,
+          {...context_system, name: 'Heat Source'},
         );
       }
 
