@@ -67,6 +67,14 @@
         "type": "boolean",
         "default": false,
         "required": true
+      },
+      "systems": {
+        "title": "Systems",
+        "type": "array",
+        "items": {
+          "title": "Serial Number",
+          "type": "string"
+        }
       }
     }
   },
@@ -132,6 +140,17 @@
           "helpvalue": "<em class='primary-text'>Show the thermostat's environmental sensors as discete sensors in HomeKit (as opposed to only being shown as part of the thermostat accessory in HomeKit).</em>"
         },
         "showIndoorHumiditySensors"
+      ]
+    },
+    {
+      "type": "fieldset",
+      "title": "Systems",
+      "items": [
+        {
+          "type": "help",
+          "helpvalue": "<em class='primary-text'>If your account has multiple locations/systems, you can limit which systems are exposed to HomeKit. Leave empty to expose all systems. Serial numbers are logged during plugin startup.</em>"
+        },
+        "systems"
       ]
     }
   ]
