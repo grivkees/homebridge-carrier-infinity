@@ -909,8 +909,6 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
           input.humidityHome = humidityInput;
       }
 
-      this.log.debug('[HUMIDITY DEBUG] Full mutation input:', JSON.stringify(input));
-
       return input;
     };
 
