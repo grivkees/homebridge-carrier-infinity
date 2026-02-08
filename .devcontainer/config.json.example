@@ -19,10 +19,11 @@
             "username": "YOUR_CARRIER_USERNAME",
             "password": "YOUR_CARRIER_PASSWORD",
             "holdBehavior": "forever",
-            "showOutdoorTemperatureSensor": false,
-            "showFanControl": false,
-            "showIndoorHumiditySensors": false,
-            "showZoneComfortActivityControls": false
+            "showOutdoorTemperatureSensor": true,
+            "showFanControl": true,
+            "showIndoorHumiditySensors": true,
+            "showZoneComfortActivityControls": true,
+            "showHumidifierDehumidifier": true
         }
     ]
 }

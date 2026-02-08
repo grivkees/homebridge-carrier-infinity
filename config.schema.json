@@ -61,6 +61,12 @@
         "type": "boolean",
         "default": false,
         "required": true
+      },
+      "showHumidifierDehumidifier": {
+        "title": "Show Humidifier/Dehumidifier Control",
+        "type": "boolean",
+        "default": false,
+        "required": true
       }
     }
   },
@@ -104,7 +110,12 @@
           "type": "help",
           "helpvalue": "<h5>Fan Control</h5><em class='primary-text'>The Fan control is a slider with the following steps: <ol start=0><li>Auto (0%)</li><li>Always On Low (33%)</li><li>Always On Medium (66%)</li><li>Always On High (100%)</li></ol><a href='https://github.com/grivkees/homebridge-carrier-infinity/wiki/Configuration#fan-control'>More details</a>.</em>"
         },
-        "showFanControl"
+        "showFanControl",
+        {
+          "type": "help",
+          "helpvalue": "<h5>Humidity Control</h5><em class='primary-text'>Show humidifier and dehumidifier controls for systems with built-in humidity management. Allows you to view and set humidity targets.</em>"
+        },
+        "showHumidifierDehumidifier"
       ]
     },
     {
