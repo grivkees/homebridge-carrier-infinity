@@ -127,3 +127,40 @@ export function convertCharDehum2SystemDehum(percent: number): number {
   }
   return Math.round((Math.min(58, Math.max(46, percent)) - 44) / 2);
 }
+
+/**
+ * Checks if a zone name is a generic default like "Zone 1", "Zone 2", etc.
+ */
+export function isGenericZoneName(name: string): boolean {
+  return /^zone\s*\d+$/i.test(name.trim());
+}
+
+/**
+ * Determines the display name prefix for a zone based on context.
+ *
+ * When there are multiple systems, always includes the system name to
+ * disambiguate accessories across systems. When there is a single system:
+ * - If the zone has a custom (non-generic) name, use it as-is.
+ * - If only one zone exists and it has a generic name, use the system name.
+ * - If multiple zones exist and a zone has a generic name, use "systemName zoneName".
+ */
+export function getZoneDisplayName(
+  zoneName: string,
+  systemName: string,
+  zoneCount: number,
+  systemCount: number,
+): string {
+  if (systemCount > 1) {
+    if (isGenericZoneName(zoneName) && zoneCount === 1) {
+      return systemName;
+    }
+    return `${systemName} ${zoneName}`;
+  }
+  if (!isGenericZoneName(zoneName)) {
+    return zoneName;
+  }
+  if (zoneCount === 1) {
+    return systemName;
+  }
+  return `${systemName} ${zoneName}`;
+}

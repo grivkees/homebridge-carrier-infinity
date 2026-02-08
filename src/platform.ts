@@ -11,6 +11,7 @@ import { EnvSensorAccessory } from './accessory_envsensor';
 import { BaseAccessory } from './accessory_base';
 import { ComfortActivityAccessory } from './accessory_comfort_activity';
 import { InfinityGraphQLClient } from './api/graphql_client';
+import { getZoneDisplayName } from './helpers';
 
 export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin {
   public readonly Service: typeof Service = this.api.hap.Service;
@@ -56,7 +57,20 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     await this.infinity_client.refreshToken();
 
     // Query for systems, start adding accessories
-    const systems = await new LocationsModelGraphQL(this.infinity_client).getSystems();
+    let systems = await new LocationsModelGraphQL(this.infinity_client).getSystems();
+
+    // Filter systems by serial number if configured (#212)
+    const allowedSystems: string[] = this.config['systems'] || [];
+    if (allowedSystems.length > 0) {
+      const filtered = systems.filter(s => allowedSystems.includes(s));
+      const skipped = systems.filter(s => !allowedSystems.includes(s));
+      for (const s of skipped) {
+        this.log.info(`[${s}] Skipping system (not in configured systems list)`);
+      }
+      systems = filtered;
+    }
+
+    const systemCount = systems.length;
     for (const serialNumber of systems) {
       // Create system api object, and save for later reference
       const system = new SystemModelGraphQL(this.infinity_client, serialNumber);
@@ -64,12 +78,16 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
 
       // Add system based accessories
       const context_system = {serialNumber: system.serialNumber};
+      const systemName = await system.profile.getName();
       system.log.info('Discovered system');
       // -> System Accessory: Outdoor Temp Sensor
       if (this.config['showOutdoorTemperatureSensor']) {
+        const oatName = systemCount > 1
+          ? `${systemName} Outdoor Temperature`
+          : 'Outdoor Temperature';
         new OutdoorTemperatureAccessory(
           this,
-          {...context_system, name: 'Outdoor Temperature'},
+          {...context_system, name: oatName},
         );
       }
 
@@ -78,12 +96,14 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
       for (const zone of zones) {  // 'of' makes sure we go through zone ids, not index
         const context_zone = {...context_system, zone: zone};
         system.log.debug(`Discovered zone ${context_zone.zone}`);
+        const zoneName = await system.config.getZoneName(zone);
+        const displayName = getZoneDisplayName(zoneName, systemName, zones.length, systemCount);
         // -> Zone Accessory: Thermostat
         new ThermostatAccessory(
           this,
           {
             ...context_zone,
-            name: `${await system.config.getZoneName(zone)} Thermostat`,
+            name: `${displayName} Thermostat`,
             holdBehavior: this.config['holdBehavior'],
             holdArgument: this.config['holdArgument'],
           },
@@ -94,7 +114,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
             this,
             {
               ...context_zone,
-              name: `${await system.config.getZoneName(zone)} Environmental Sensor`,
+              name: `${displayName} Environmental Sensor`,
             },
           );
         }
@@ -104,7 +124,7 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
             this,
             {
               ...context_zone,
-              name: `${await system.config.getZoneName(zone)} Comfort Activity`,
+              name: `${displayName} Comfort Activity`,
               holdBehavior: this.config['holdBehavior'],
               holdArgument: this.config['holdArgument'],
             },

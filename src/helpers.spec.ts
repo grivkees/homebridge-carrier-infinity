@@ -7,6 +7,8 @@ import {
   convertCharHum2SystemHum,
   convertSystemDehum2CharDehum,
   convertCharDehum2SystemDehum,
+  isGenericZoneName,
+  getZoneDisplayName,
 } from './helpers';
 
 describe('convertCharTemp2SystemTemp', () => {
@@ -214,6 +216,57 @@ describe('convertCharDehum2SystemDehum', () => {
   test('handles NaN gracefully', () => {
     expect(convertCharDehum2SystemDehum(NaN)).toEqual(7);
     expect(convertCharDehum2SystemDehum(Infinity)).toEqual(7);
+  });
+});
+
+describe('isGenericZoneName', () => {
+  test('detects generic zone names', () => {
+    expect(isGenericZoneName('Zone 1')).toBe(true);
+    expect(isGenericZoneName('Zone 2')).toBe(true);
+    expect(isGenericZoneName('zone 1')).toBe(true);
+    expect(isGenericZoneName('ZONE 1')).toBe(true);
+    expect(isGenericZoneName('Zone1')).toBe(true);
+    expect(isGenericZoneName('zone12')).toBe(true);
+    expect(isGenericZoneName(' Zone 1 ')).toBe(true);
+  });
+
+  test('rejects custom zone names', () => {
+    expect(isGenericZoneName('Master Bedroom')).toBe(false);
+    expect(isGenericZoneName('Living Room')).toBe(false);
+    expect(isGenericZoneName('Upstairs')).toBe(false);
+    expect(isGenericZoneName('Zone')).toBe(false);
+    expect(isGenericZoneName('Zone A')).toBe(false);
+    expect(isGenericZoneName('My Zone 1')).toBe(false);
+  });
+});
+
+describe('getZoneDisplayName', () => {
+  test('single system, single zone with generic name uses system name', () => {
+    expect(getZoneDisplayName('Zone 1', 'My Home', 1, 1)).toBe('My Home');
+  });
+
+  test('single system, multiple zones with generic names use system + zone name', () => {
+    expect(getZoneDisplayName('Zone 1', 'My Home', 3, 1)).toBe('My Home Zone 1');
+    expect(getZoneDisplayName('Zone 2', 'My Home', 3, 1)).toBe('My Home Zone 2');
+  });
+
+  test('single system, custom zone names are preserved', () => {
+    expect(getZoneDisplayName('Master Bedroom', 'My Home', 1, 1)).toBe('Master Bedroom');
+    expect(getZoneDisplayName('Living Room', 'My Home', 3, 1)).toBe('Living Room');
+  });
+
+  test('multi-system, single zone with generic name uses system name', () => {
+    expect(getZoneDisplayName('Zone 1', 'Lake House', 1, 2)).toBe('Lake House');
+  });
+
+  test('multi-system, multiple zones with generic names use system + zone name', () => {
+    expect(getZoneDisplayName('Zone 1', 'Lake House', 3, 2)).toBe('Lake House Zone 1');
+    expect(getZoneDisplayName('Zone 2', 'Lake House', 3, 2)).toBe('Lake House Zone 2');
+  });
+
+  test('multi-system, custom zone names are prefixed with system name', () => {
+    expect(getZoneDisplayName('Master Bedroom', 'Lake House', 1, 2)).toBe('Lake House Master Bedroom');
+    expect(getZoneDisplayName('Living Room', 'Lake House', 3, 2)).toBe('Lake House Living Room');
   });
 });
 
