@@ -6,7 +6,7 @@ import { FilterService } from './characteristics_filter';
 import {
   convertSystemTemp2CharTemp,
 } from './helpers';
-import { ThermostatRHService } from './characteristics_humidity';
+import { ThermostatRHService, HumidifierService } from './characteristics_humidity';
 import { FanService } from './characteristics_fan';
 import { ACService } from './characteristics_ac';
 import { BaseAccessory } from './accessory_base';
@@ -14,6 +14,7 @@ import { BaseAccessory } from './accessory_base';
 export class ThermostatAccessory extends BaseAccessory {
   private service: Service;
   private fan_service?: Service;
+  private humidifier_service?: Service;
 
   protected ID(context: Record<string, string>): string {
     return `${context.serialNumber}:${Number(context.zone)-1}`;
@@ -73,11 +74,19 @@ export class ThermostatAccessory extends BaseAccessory {
       this.accessory.context,
     ).wrap(this.service);
 
-    // Humidity Control
+    // Humidity Sensor (on thermostat service)
     new ThermostatRHService(
       this.platform,
       this.accessory.context,
     ).wrap(this.service);
+
+    // Humidifier/Dehumidifier Control
+    this.humidifier_service = this.accessory.getService(this.platform.Service.HumidifierDehumidifier);
+    if (this.platform.config['showHumidifierDehumidifier']) {
+      this.setupHumidifierService();
+    } else if (this.humidifier_service) {
+      this.accessory.removeService(this.humidifier_service);
+    }
   }
 
   setupFanService(): void {
@@ -94,5 +103,23 @@ export class ThermostatAccessory extends BaseAccessory {
       this.platform,
       this.accessory.context,
     ).wrap(this.fan_service);
+  }
+
+  setupHumidifierService(): void {
+    this.humidifier_service = this.humidifier_service || this.accessory.addService(
+      this.platform.Service.HumidifierDehumidifier,
+    );
+
+    this.system.config.fetch().then(async () => {
+      this.humidifier_service?.setCharacteristic(
+        this.platform.Characteristic.Name,
+        await this.system.config.getZoneName(this.accessory.context.zone) + ' Humidity',
+      );
+    });
+
+    new HumidifierService(
+      this.platform,
+      this.accessory.context,
+    ).wrap(this.humidifier_service);
   }
 }

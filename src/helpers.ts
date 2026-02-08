@@ -76,3 +76,54 @@ export function processSetpointDeadband(
 export function range(start: number, end: number): number[] {
   return Array.from({length: (end - start) + 1}, (_, i) => start + i);
 }
+
+/**
+ * Convert system humidifier target (rhtg) to HomeKit characteristic value
+ * System stores values as actual_percent / 5 (e.g., 40% = 8)
+ * HomeKit expects actual percentage 5-45%
+ */
+export function convertSystemHum2CharHum(rhtg: number): number {
+  // rhtg=0, undefined, or NaN means "off" or minimum, treat as 5%
+  if (!rhtg || rhtg <= 0 || !Number.isFinite(rhtg)) {
+    return 5;
+  }
+  return Math.min(45, Math.max(5, rhtg * 5));
+}
+
+/**
+ * Convert HomeKit humidifier target to system value (rhtg)
+ */
+export function convertCharHum2SystemHum(percent: number): number {
+  // Handle NaN/undefined by defaulting to minimum
+  if (!Number.isFinite(percent)) {
+    return 1;
+  }
+  return Math.round(Math.min(45, Math.max(5, percent)) / 5);
+}
+
+/**
+ * Convert system dehumidifier target (rclg) to HomeKit characteristic value
+ * Valid API range is 1-7 (46-58% in 2% increments)
+ * Formula: percentage = 44 + (rclg * 2)
+ * HomeKit expects actual percentage 46-58%
+ */
+export function convertSystemDehum2CharDehum(rclg: number): number {
+  // rclg=0, undefined, or NaN means "off" or maximum (least dehumidification), treat as 58%
+  if (!rclg || rclg <= 0 || !Number.isFinite(rclg)) {
+    return 58;
+  }
+  return Math.min(58, Math.max(46, 44 + rclg * 2));
+}
+
+/**
+ * Convert HomeKit dehumidifier target to system value (rclg)
+ * Valid API range is 1-7 (46-58% in 2% increments)
+ * Formula: rclg = (percentage - 44) / 2
+ */
+export function convertCharDehum2SystemDehum(percent: number): number {
+  // Handle NaN/undefined by defaulting to maximum (least dehumidification)
+  if (!Number.isFinite(percent)) {
+    return 7;
+  }
+  return Math.round((Math.min(58, Math.max(46, percent)) - 44) / 2);
+}

@@ -49,6 +49,8 @@ export default tseslint.config(
             'dataservice',
             'dayId',
             'deadband',
+            'Dehum',
+            'dehumidification',
             'eHeatKwh',
             'eheat',
             'emailVerified',

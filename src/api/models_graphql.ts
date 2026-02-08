@@ -6,7 +6,13 @@
  * to maintain backward compatibility with accessory and characteristic code.
  */
 
-import { processSetpointDeadband } from '../helpers';
+import {
+  processSetpointDeadband,
+  convertSystemHum2CharHum,
+  convertCharHum2SystemHum,
+  convertSystemDehum2CharDehum,
+  convertCharDehum2SystemDehum,
+} from '../helpers';
 import { MemoizeExpiring } from 'typescript-memoize';
 import { Mutex, tryAcquire, E_ALREADY_LOCKED, E_CANCELED, E_TIMEOUT } from 'async-mutex';
 import { Logger } from 'homebridge';
@@ -349,6 +355,22 @@ export class SystemStatusModelGraphQL {
     await this.fetch();
     return Number(this.getZone(zone).htsp);
   }
+
+  async getHumidifier(): Promise<string> {
+    await this.fetch();
+    // Check if humidifier is actively running based on status mode
+    // The 'humid' field indicates humidifier status
+    const status = this.unified.getStatus();
+    return status.humid || STATUS.OFF;
+  }
+
+  async getDehumidifier(): Promise<string> {
+    await this.fetch();
+    // Check if dehumidifier is actively running
+    // Dehumidify mode uses the AC to remove humidity
+    const status = this.unified.getStatus();
+    return status.mode === 'dehumidify' ? STATUS.ON : STATUS.OFF;
+  }
 }
 
 /**
@@ -497,6 +519,72 @@ export class SystemConfigModelReadOnlyGraphQL {
     const tomorrow_obj = program_obj.day[(now.getDay() + 1) % 7];
     return tomorrow_obj.period[0].time;
   }
+
+  protected getHumidityConfig(activity: string) {
+    const config = this.unified.getConfig();
+    switch (activity) {
+      case ACTIVITY.HOME:
+      case ACTIVITY.WAKE:
+      case ACTIVITY.SLEEP:
+      case ACTIVITY.MANUAL:
+        return config.humidityHome;
+      case ACTIVITY.AWAY:
+        return config.humidityAway;
+      case ACTIVITY.VACATION:
+        return config.humidityVacation;
+      default:
+        return config.humidityHome;
+    }
+  }
+
+  async getActivityHumidifierState(activity: string): Promise<string> {
+    await this.fetch();
+    const humidityConfig = this.getHumidityConfig(activity);
+    return humidityConfig?.humidifier || STATUS.OFF;
+  }
+
+  async getActivityDehumidifierState(activity: string): Promise<string> {
+    await this.fetch();
+    const humidityConfig = this.getHumidityConfig(activity);
+    // Dehumidification is enabled when humid is "on" or rclgovercool is "on"
+    return humidityConfig?.humid || humidityConfig?.rclgovercool || STATUS.OFF;
+  }
+
+  async getActivityHumidifierTarget(activity: string): Promise<number> {
+    await this.fetch();
+    const humidityConfig = this.getHumidityConfig(activity);
+    const rhtg = humidityConfig?.rhtg;
+
+    // Log if we get unexpected values
+    if (humidityConfig === undefined) {
+      this.log.debug(`No humidity config found for activity "${activity}"`);
+    } else if (rhtg === undefined || rhtg === null) {
+      this.log.debug(`No rhtg (humidifier target) in humidity config for activity "${activity}"`);
+    } else if (!Number.isFinite(rhtg) || rhtg < 0) {
+      this.log.warn(`Unexpected rhtg value "${rhtg}" for activity "${activity}", using default`);
+    }
+
+    // rhtg is stored as value/5 (e.g., 40% = 8), convert to actual percentage
+    return convertSystemHum2CharHum(rhtg || 0);
+  }
+
+  async getActivityDehumidifierTarget(activity: string): Promise<number> {
+    await this.fetch();
+    const humidityConfig = this.getHumidityConfig(activity);
+    const rclg = humidityConfig?.rclg;
+
+    // Log if we get unexpected values
+    if (humidityConfig === undefined) {
+      this.log.debug(`No humidity config found for activity "${activity}"`);
+    } else if (rclg === undefined || rclg === null) {
+      this.log.debug(`No rclg (dehumidifier target) in humidity config for activity "${activity}"`);
+    } else if (!Number.isFinite(rclg) || rclg < 0) {
+      this.log.warn(`Unexpected rclg value "${rclg}" for activity "${activity}", using default`);
+    }
+
+    // rclg is stored as value/5 (e.g., 50% = 10), convert to actual percentage
+    return convertSystemDehum2CharDehum(rclg || 0);
+  }
 }
 
 /**
@@ -548,17 +636,31 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
           return;
         }
 
-        // Refresh data first
+        // Fetch config once, then apply all mutations to a local copy
+        // This prevents later mutations from overwriting earlier ones
+        // (API may not have propagated changes yet)
         await this.unified.fetch();
-        const config = this.unified.getConfig();
+        const localConfig = JSON.parse(JSON.stringify(this.unified.getConfig()));
         const status = this.unified.getStatus();
 
-        // Apply all queued mutations
         while (this.mutations.length > 0) {
           const mutation = this.mutations.shift();
           if (mutation) {
-            const input = mutation(config, status);
+            const input = mutation(localConfig, status);
             await this.executeMutation(input);
+
+            // Update local config with the changes we just sent
+            // so subsequent mutations see the pending changes
+            const configInput = input as InfinityConfigInput;
+            if (configInput.humidityHome) {
+              localConfig.humidityHome = { ...localConfig.humidityHome, ...configInput.humidityHome };
+            }
+            if (configInput.humidityAway) {
+              localConfig.humidityAway = { ...localConfig.humidityAway, ...configInput.humidityAway };
+            }
+            if (configInput.humidityVacation) {
+              localConfig.humidityVacation = { ...localConfig.humidityVacation, ...configInput.humidityVacation };
+            }
           }
         }
 
@@ -570,7 +672,10 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
         // Refresh to confirm
         if (this.mutations.length === 0) {
           await this.unified.fetch();
+          const newConfig = this.unified.getConfig();
           this.log.debug('Successful propagation to carrier api is confirmed.');
+          this.log.debug('[HUMIDITY DEBUG] Config AFTER push - humidityHome:', JSON.stringify(newConfig?.humidityHome));
+          this.log.debug('[HUMIDITY DEBUG] Config AFTER push - humidityAway:', JSON.stringify(newConfig?.humidityAway));
         }
       });
     } catch (e) {
@@ -587,8 +692,13 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
 
   private async executeMutation(input: any): Promise<void> {
     // Determine mutation type based on input properties
-    if ('mode' in input && !('zoneId' in input)) {
-      // System config mutation
+    const isSystemConfig = 'mode' in input ||
+      'humidityHome' in input ||
+      'humidityAway' in input ||
+      'humidityVacation' in input;
+
+    if (isSystemConfig && !('zoneId' in input)) {
+      // System config mutation (mode, humidity settings, etc.)
       await this.graphql_client.mutate<UpdateInfinityConfigResponse>(
         UPDATE_INFINITY_CONFIG,
         { input },
@@ -707,6 +817,77 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
     };
 
     this.mutations.push(m1, m2);
+    this.push();
+  }
+
+  async setHumidityConfig(
+    activity: string,
+    humidifier?: string,
+    dehumidifier?: string,
+    humidifierTarget?: number,
+    dehumidifierTarget?: number,
+  ): Promise<void> {
+    this.log.debug(
+      `Setting humidity for ${activity}:`,
+      humidifier !== undefined ? `humidifier=${humidifier}` : '',
+      dehumidifier !== undefined ? `dehumidifier=${dehumidifier}` : '',
+      humidifierTarget !== undefined ? `humidifierTarget=${humidifierTarget}` : '',
+      dehumidifierTarget !== undefined ? `dehumidifierTarget=${dehumidifierTarget}` : '',
+    );
+
+    const m: ConfigMutationGraphQL = (config, _status) => {
+      // Get current humidity config for the activity
+      const activityKey = activity === ACTIVITY.AWAY ? 'humidityAway'
+        : activity === ACTIVITY.VACATION ? 'humidityVacation'
+          : 'humidityHome';
+      const currentHumidityConfig = config?.[activityKey] || {};
+
+      // Start with a complete copy of current config, then apply changes
+      const humidityInput: any = { ...currentHumidityConfig };
+
+      // Apply explicit changes
+      if (humidifier !== undefined) {
+        humidityInput.humidifier = humidifier;
+      }
+      if (dehumidifier !== undefined) {
+        humidityInput.humid = dehumidifier;
+        humidityInput.rclgovercool = dehumidifier;
+      }
+      if (humidifierTarget !== undefined) {
+        humidityInput.rhtg = convertCharHum2SystemHum(humidifierTarget);
+      }
+      if (dehumidifierTarget !== undefined) {
+        humidityInput.rclg = convertCharDehum2SystemDehum(dehumidifierTarget);
+      }
+
+      const input: InfinityConfigInput = {
+        serial: this.unified.serialNumber,
+      };
+
+      // Apply to appropriate activity config
+      switch (activity) {
+        case ACTIVITY.HOME:
+        case ACTIVITY.WAKE:
+        case ACTIVITY.SLEEP:
+        case ACTIVITY.MANUAL:
+          input.humidityHome = humidityInput;
+          break;
+        case ACTIVITY.AWAY:
+          input.humidityAway = humidityInput;
+          break;
+        case ACTIVITY.VACATION:
+          input.humidityVacation = humidityInput;
+          break;
+        default:
+          input.humidityHome = humidityInput;
+      }
+
+      this.log.debug('[HUMIDITY DEBUG] Full mutation input:', JSON.stringify(input));
+
+      return input;
+    };
+
+    this.mutations.push(m);
     this.push();
   }
 }
