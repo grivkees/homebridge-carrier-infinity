@@ -511,6 +511,12 @@ export class SystemConfigModelReadOnlyGraphQL {
     return this.getZoneActivityInternal(zone);
   }
 
+  /**
+   * Check if all enabled zones have the specified activity hold active
+   *
+   * @param activity_name - The activity name to check (e.g., "away", "home")
+   * @returns true if ALL enabled zones have hold active with this activity, false otherwise
+   */
   async getAllZonesActivityHoldStatus(activity_name: string): Promise<boolean> {
     await this.fetch();
     const config = this.unified.getConfig();
@@ -895,6 +901,16 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
     this.push();
   }
 
+  /**
+   * Set all enabled zones to the same activity hold
+   *
+   * This method queues mutations for all enabled zones to set them to the specified
+   * activity with the given hold time. The mutations are batched and executed with
+   * the standard 2-second debounce and verification mechanism.
+   *
+   * @param activity - Activity name ("away", "home", etc.) or empty string to clear hold
+   * @param hold_until - ISO 8601 timestamp for hold expiration, or null for indefinite
+   */
   async setAllZonesActivityHold(
     activity: string,
     hold_until: string | null,
@@ -906,7 +922,7 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
     // Create mutation for each enabled zone
     for (const zone of config.zones) {
       if (zone.enabled === STATUS.ON) {
-        const m: ConfigMutationGraphQL = (cfg, status) => {
+        const m: ConfigMutationGraphQL = (_cfg, _status) => {
           return {
             serial: this.unified.serialNumber,
             zoneId: zone.id,

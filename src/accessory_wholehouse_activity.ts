@@ -47,7 +47,7 @@ export class WholeHouseActivityAccessory extends BaseAccessory {
       ACTIVITY.HOME,
     ].forEach(
       (activity) => {
-        const switch_name = `All Zones ${activity[0].toUpperCase()}${activity.slice(1)}`;
+        const switchName = `All Zones ${activity[0].toUpperCase()}${activity.slice(1)}`;
         new WholeHouseActivity(
           this.platform,
           this.accessory.context,
@@ -55,11 +55,11 @@ export class WholeHouseActivityAccessory extends BaseAccessory {
         ).wrap(
           this.useService(
             this.platform.Service.Switch,
-            switch_name,
+            switchName,
             activity,
           ).setCharacteristic(
             this.platform.Characteristic.ConfiguredName,
-            switch_name,
+            switchName,
           ),
         );
       },
