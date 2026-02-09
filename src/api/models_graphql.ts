@@ -511,6 +511,28 @@ export class SystemConfigModelReadOnlyGraphQL {
     return this.getZoneActivityInternal(zone);
   }
 
+  async getAllZonesActivityHoldStatus(activity_name: string): Promise<boolean> {
+    await this.fetch();
+    const config = this.unified.getConfig();
+    const status = this.unified.getStatus();
+
+    const enabledZones = config.zones.filter(z => z.enabled === STATUS.ON);
+    if (enabledZones.length === 0) {
+      return false;
+    }
+
+    // All enabled zones must have:
+    // 1. Hold enabled
+    // 2. This specific activity as the holdActivity
+    // 3. Current activity matches (from status)
+    return enabledZones.every(zone => {
+      const zoneStatus = status.zones.find(z => z.id === zone.id);
+      return zone.hold === STATUS.ON &&
+             zone.holdActivity === activity_name &&
+             zoneStatus?.currentActivity === activity_name;
+    });
+  }
+
   protected getZoneActivityConfig(zone: string, activity_name: string): InfinityZoneActivity {
     const config = this.unified.getConfig();
 
@@ -870,6 +892,33 @@ export class SystemConfigModelGraphQL extends SystemConfigModelReadOnlyGraphQL {
     };
 
     this.mutations.push(m);
+    this.push();
+  }
+
+  async setAllZonesActivityHold(
+    activity: string,
+    hold_until: string | null,
+  ): Promise<void> {
+    this.log.debug(`Setting all zones activity to ${activity} until ${hold_until}`);
+
+    const config = this.unified.getConfig();
+
+    // Create mutation for each enabled zone
+    for (const zone of config.zones) {
+      if (zone.enabled === STATUS.ON) {
+        const m: ConfigMutationGraphQL = (cfg, status) => {
+          return {
+            serial: this.unified.serialNumber,
+            zoneId: zone.id,
+            hold: activity ? STATUS.ON : STATUS.OFF,
+            holdActivity: activity || null,
+            otmr: activity ? hold_until : null,
+          } as InfinityZoneConfigInput;
+        };
+        this.mutations.push(m);
+      }
+    }
+
     this.push();
   }
 
