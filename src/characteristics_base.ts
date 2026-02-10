@@ -20,8 +20,10 @@ export function safeSetProps(
   const val = characteristic.value as number;
   const min = props.minValue;
   const max = props.maxValue;
-  if ((min !== undefined && val < min) || (max !== undefined && val > max)) {
-    characteristic.updateValue(defaultValue ?? min ?? max);
+  if (min !== undefined && val < min) {
+    characteristic.updateValue(defaultValue ?? min);
+  } else if (max !== undefined && val > max) {
+    characteristic.updateValue(defaultValue ?? max);
   }
   characteristic.setProps(props);
 }
@@ -128,7 +130,7 @@ export abstract class ThermostatCharacteristicWrapper extends CharacteristicWrap
         target_ms += Number(arg[0]) * 60 * 60 * 1000;
         target_ms += Number(arg[1]) * 60 * 1000;
         const target_date = new Date(target_ms);
-        return `${target_date.getHours()}:${target_date.getMinutes()}`.padStart(5, '0');
+        return `${String(target_date.getHours()).padStart(2, '0')}:${String(target_date.getMinutes()).padStart(2, '0')}`;
       }
       case 'until_x':
         return this.context.holdArgument;

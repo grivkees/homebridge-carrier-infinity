@@ -52,7 +52,7 @@ describe('safeSetProps', () => {
   test('updates value to maxValue when current value is above new max', () => {
     const char = mockCharacteristic(150);
     safeSetProps(char, { minValue: 10, maxValue: 100 });
-    expect(char.updateValue).toHaveBeenCalledWith(10);
+    expect(char.updateValue).toHaveBeenCalledWith(100);
     expect(char.setProps).toHaveBeenCalledWith({ minValue: 10, maxValue: 100 });
   });
 
@@ -217,48 +217,46 @@ describe('ThermostatCharacteristicWrapper', () => {
       expect(result).toBe('23:59');
     });
 
-    test('for_x with holdArgument 1:30 calculates time 1hr 30min from now', async () => {
-      jest.useFakeTimers();
-      jest.setSystemTime(new Date('2025-01-15T10:00:00'));
-      const context = createContext({ holdBehavior: 'for_x', holdArgument: '1:30' });
-      const wrapper = new TestWrapper(platform, context);
-      const result = await wrapper.getHoldTime();
-      expect(result).toBe('11:30');
-      jest.useRealTimers();
-    });
+    describe('for_x', () => {
+      beforeEach(() => {
+        jest.useFakeTimers();
+      });
 
-    test('for_x with holdArgument 0:15 calculates time 15min from now', async () => {
-      jest.useFakeTimers();
-      jest.setSystemTime(new Date('2025-01-15T10:00:00'));
-      const context = createContext({ holdBehavior: 'for_x', holdArgument: '0:15' });
-      const wrapper = new TestWrapper(platform, context);
-      const result = await wrapper.getHoldTime();
-      expect(result).toBe('10:15');
-      jest.useRealTimers();
-    });
+      afterEach(() => {
+        jest.useRealTimers();
+      });
 
-    test('for_x with holdArgument 2:00 calculates time 2hr from now', async () => {
-      jest.useFakeTimers();
-      jest.setSystemTime(new Date('2025-01-15T10:00:00'));
-      const context = createContext({ holdBehavior: 'for_x', holdArgument: '2:00' });
-      const wrapper = new TestWrapper(platform, context);
-      const result = await wrapper.getHoldTime();
-      // Note: padStart(5,'0') left-pads the entire "H:M" string, so when
-      // minutes is 0 the result is "012:0" rather than "12:00". This reflects
-      // the actual implementation behavior.
-      expect(result).toBe('012:0');
-      jest.useRealTimers();
-    });
+      test('holdArgument 1:30 calculates time 1hr 30min from now', async () => {
+        jest.setSystemTime(new Date('2025-01-15T10:00:00'));
+        const context = createContext({ holdBehavior: 'for_x', holdArgument: '1:30' });
+        const wrapper = new TestWrapper(platform, context);
+        const result = await wrapper.getHoldTime();
+        expect(result).toBe('11:30');
+      });
 
-    test('for_x wrapping past midnight', async () => {
-      jest.useFakeTimers();
-      jest.setSystemTime(new Date('2025-01-15T23:00:00'));
-      const context = createContext({ holdBehavior: 'for_x', holdArgument: '2:00' });
-      const wrapper = new TestWrapper(platform, context);
-      const result = await wrapper.getHoldTime();
-      // 23:00 + 2:00 = 1:0 next day; padStart(5,'0') yields "001:0"
-      expect(result).toBe('001:0');
-      jest.useRealTimers();
+      test('holdArgument 0:15 calculates time 15min from now', async () => {
+        jest.setSystemTime(new Date('2025-01-15T10:00:00'));
+        const context = createContext({ holdBehavior: 'for_x', holdArgument: '0:15' });
+        const wrapper = new TestWrapper(platform, context);
+        const result = await wrapper.getHoldTime();
+        expect(result).toBe('10:15');
+      });
+
+      test('holdArgument 2:00 calculates time 2hr from now', async () => {
+        jest.setSystemTime(new Date('2025-01-15T10:00:00'));
+        const context = createContext({ holdBehavior: 'for_x', holdArgument: '2:00' });
+        const wrapper = new TestWrapper(platform, context);
+        const result = await wrapper.getHoldTime();
+        expect(result).toBe('12:00');
+      });
+
+      test('wrapping past midnight', async () => {
+        jest.setSystemTime(new Date('2025-01-15T23:00:00'));
+        const context = createContext({ holdBehavior: 'for_x', holdArgument: '2:00' });
+        const wrapper = new TestWrapper(platform, context);
+        const result = await wrapper.getHoldTime();
+        expect(result).toBe('01:00');
+      });
     });
 
     test('default/unknown holdBehavior returns empty string', async () => {
