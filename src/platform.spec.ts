@@ -366,7 +366,7 @@ describe('CarrierInfinityHomebridgePlatform', () => {
         // The callback calls discoverSystems().catch() which logs and resolves
         callback();
         // Allow async tasks to settle
-        setTimeout(resolve, 50);
+        setImmediate(resolve);
       });
 
       expect(log.error).toHaveBeenCalledWith(
