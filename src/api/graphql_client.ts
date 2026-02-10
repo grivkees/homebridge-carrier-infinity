@@ -170,20 +170,26 @@ export class InfinityGraphQLClient {
    * Refresh token via Okta OAuth2 endpoint
    */
   private async refreshTokenViaOkta(): Promise<void> {
-    const response = await Axios.post<OAuth2RefreshResponse>(
-      INFINITY_OAUTH_TOKEN_ENDPOINT,
-      {
-        client_id: INFINITY_OAUTH_CLIENT_ID,
-        grant_type: 'refresh_token',
-        refresh_token: this.refresh_token,
-        scope: 'offline_access',
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json',
+    let response;
+    try {
+      response = await Axios.post<OAuth2RefreshResponse>(
+        INFINITY_OAUTH_TOKEN_ENDPOINT,
+        {
+          client_id: INFINITY_OAUTH_CLIENT_ID,
+          grant_type: 'refresh_token',
+          refresh_token: this.refresh_token,
+          scope: 'offline_access',
         },
-      },
-    );
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        },
+      );
+    } catch (error) {
+      this.logAuthError('token refresh (Okta)', error);
+      throw error;
+    }
 
     if (response.data.access_token) {
       this.access_token = response.data.access_token;
@@ -211,10 +217,16 @@ export class InfinityGraphQLClient {
       password: this.password,
     };
 
-    const response = await this.axiosNoAuth.post<GraphQLResponse<AssistedLoginResponse>>('', {
-      query: ASSISTED_LOGIN,
-      variables: { input },
-    });
+    let response;
+    try {
+      response = await this.axiosNoAuth.post<GraphQLResponse<AssistedLoginResponse>>('', {
+        query: ASSISTED_LOGIN,
+        variables: { input },
+      });
+    } catch (error) {
+      this.logAuthError('assistedLogin', error);
+      throw error;
+    }
 
     // Check for GraphQL errors
     if (response.data.errors && response.data.errors.length > 0) {
@@ -242,6 +254,17 @@ export class InfinityGraphQLClient {
     this.token_acquired_at = Date.now() / 1000;
 
     this.log.debug('Token acquired via assistedLogin mutation.');
+  }
+
+  private logAuthError(context: string, error: unknown): void {
+    if (Axios.isAxiosError(error)) {
+      const status = (error as AxiosError).response?.status;
+      const statusText = (error as AxiosError).response?.statusText;
+      const statusInfo = status ? ` with status ${status}${statusText ? ` ${statusText}` : ''}` : '';
+      this.log.error(`[Auth] ${context} failed${statusInfo}`);
+    } else {
+      this.log.error(`[Auth] ${context} failed:`, error);
+    }
   }
 
   private describeOperation(operationType: 'query' | 'mutation', document: string): string {
