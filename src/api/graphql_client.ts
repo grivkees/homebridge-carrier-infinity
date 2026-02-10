@@ -20,7 +20,7 @@ import {
   GraphQLError,
 } from './interface_graphql_mutations';
 
-import Axios, { AxiosInstance } from 'axios';
+import Axios, { AxiosInstance, AxiosError } from 'axios';
 import { Logger } from 'homebridge';
 import { MemoizeExpiring } from 'typescript-memoize';
 import { Retryable, BackOffPolicy } from 'typescript-retry-decorator';
@@ -244,6 +244,29 @@ export class InfinityGraphQLClient {
     this.log.debug('Token acquired via assistedLogin mutation.');
   }
 
+  private describeOperation(operationType: 'query' | 'mutation', document: string): string {
+    const match = document.match(/\b(?:query|mutation)\s+([A-Za-z0-9_]+)/);
+    const opName = match?.[1];
+    return opName ? `${operationType} ${opName}` : operationType;
+  }
+
+  private logOperationError(operationLabel: string, error: unknown): void {
+    if (Axios.isAxiosError(error)) {
+      const status = (error as AxiosError).response?.status;
+      const statusText = (error as AxiosError).response?.statusText;
+      const statusInfo = status ? ` with status ${status}${statusText ? ` ${statusText}` : ''}` : '';
+      this.log.error(`[GraphQL] ${operationLabel} failed${statusInfo}`);
+
+      const gqlErrors = (error.response?.data as GraphQLResponse<unknown> | undefined)?.errors;
+      if (gqlErrors && gqlErrors.length > 0) {
+        const errorMessages = gqlErrors.map(e => e.message).join('; ');
+        this.log.error(`[GraphQL] ${operationLabel} response errors: ${errorMessages}`);
+      }
+    } else {
+      this.log.error(`[GraphQL] ${operationLabel} failed:`, error);
+    }
+  }
+
   /**
    * Execute a GraphQL query
    *
@@ -255,14 +278,23 @@ export class InfinityGraphQLClient {
     // Ensure we have a valid token
     await this.refreshToken();
 
-    const response = await this.axios.post<GraphQLResponse<T>>('', {
-      query,
-      variables,
-    });
+    const operationLabel = this.describeOperation('query', query);
+
+    let response;
+    try {
+      response = await this.axios.post<GraphQLResponse<T>>('', {
+        query,
+        variables,
+      });
+    } catch (error) {
+      this.logOperationError(operationLabel, error);
+      throw error;
+    }
 
     // Check for GraphQL errors
     if (response.data.errors && response.data.errors.length > 0) {
       const errorMessages = response.data.errors.map(e => e.message).join(', ');
+      this.log.error(`[GraphQL] ${operationLabel} returned errors: ${errorMessages}`);
       throw new Error(`GraphQL query errors: ${errorMessages}`);
     }
 
@@ -284,14 +316,23 @@ export class InfinityGraphQLClient {
     // Ensure we have a valid token
     await this.refreshToken();
 
-    const response = await this.axios.post<GraphQLResponse<T>>('', {
-      query: mutation,
-      variables,
-    });
+    const operationLabel = this.describeOperation('mutation', mutation);
+
+    let response;
+    try {
+      response = await this.axios.post<GraphQLResponse<T>>('', {
+        query: mutation,
+        variables,
+      });
+    } catch (error) {
+      this.logOperationError(operationLabel, error);
+      throw error;
+    }
 
     // Check for GraphQL errors
     if (response.data.errors && response.data.errors.length > 0) {
       const errorMessages = response.data.errors.map(e => e.message).join(', ');
+      this.log.error(`[GraphQL] ${operationLabel} returned errors: ${errorMessages}`);
       throw new Error(`GraphQL mutation errors: ${errorMessages}`);
     }
 

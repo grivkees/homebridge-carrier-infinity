@@ -201,6 +201,9 @@ class UnifiedSystemModelGraphQL extends BaseModelGraphQL {
     if (!system) {
       throw new Error(`System ${this.serialNumber} not found in GraphQL response`);
     }
+    if (!system.config) {
+      throw new Error(`System ${this.serialNumber} returned without config section in GraphQL response`);
+    }
 
     this.data_object = system;
     const new_hash = this.hashDataObject(system);
