@@ -112,23 +112,41 @@ export class InfinityGraphQLClient {
   }
 
   /**
-   * Refresh OAuth 2.0 token with memoization (24 hours)
+   * Check if auth token is expired and refresh if needed
    *
    * This is called before every API request to ensure we have a valid token.
-   * The memoization ensures we only refresh once per day unless the token expires.
+   * Unlike the old implementation with 24-hour memoization, this checks
+   * the actual token expiration time before each request.
+   *
+   * We refresh tokens with a 5-minute buffer before actual expiration to
+   * prevent race conditions where a token expires mid-request.
    */
-  @MemoizeExpiring(24 * 60 * 60 * 1000) // every 24 hrs
-  async refreshToken(): Promise<void> {
-    try {
+  async checkAuthExpiration(): Promise<void> {
+    // If we have no refresh token, we need to login
+    if (!this.refresh_token) {
       await this.forceRefreshToken();
-      this.log.info('Completed login / token refresh successfully.');
-    } catch (error) {
-      this.log.error(
-        '[API] Could not refresh access token: ',
-        Axios.isAxiosError(error) ? error.message : error,
-      );
-      throw error;
+      return;
     }
+
+    // Check if token is expired (with 5-minute buffer)
+    const BUFFER_SECONDS = 5 * 60;
+    const now = Date.now() / 1000;
+    const tokenAge = now - this.token_acquired_at;
+    const tokenExpired = tokenAge >= (this.token_expires_in - BUFFER_SECONDS);
+
+    if (tokenExpired) {
+      await this.forceRefreshToken();
+    }
+  }
+
+  /**
+   * Public method to refresh token (for backward compatibility)
+   *
+   * This method is called explicitly during platform initialization.
+   * It now delegates to checkAuthExpiration() which handles the logic.
+   */
+  async refreshToken(): Promise<void> {
+    await this.checkAuthExpiration();
   }
 
   /**
@@ -146,15 +164,11 @@ export class InfinityGraphQLClient {
   async forceRefreshToken(): Promise<void> {
     this.log.info('Attempting login / token refresh.');
 
-    // Check if we can use refresh token
-    const now = Date.now() / 1000;
-    const tokenAge = now - this.token_acquired_at;
-    const tokenExpired = tokenAge >= this.token_expires_in;
-
-    if (this.refresh_token && !tokenExpired) {
-      // Use Okta refresh token endpoint
+    // If we have a refresh token, try Okta first
+    if (this.refresh_token) {
       try {
         await this.refreshTokenViaOkta();
+        this.log.info('Completed login / token refresh successfully.');
         return;
       } catch (error) {
         this.log.warn('Okta token refresh failed, falling back to assistedLogin:', error);
@@ -163,7 +177,16 @@ export class InfinityGraphQLClient {
     }
 
     // Use assistedLogin mutation
-    await this.loginViaAssistedLogin();
+    try {
+      await this.loginViaAssistedLogin();
+      this.log.info('Completed login / token refresh successfully.');
+    } catch (error) {
+      this.log.error(
+        '[API] Could not refresh access token: ',
+        Axios.isAxiosError(error) ? error.message : error,
+      );
+      throw error;
+    }
   }
 
   /**
@@ -253,7 +276,7 @@ export class InfinityGraphQLClient {
    */
   async query<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
     // Ensure we have a valid token
-    await this.refreshToken();
+    await this.checkAuthExpiration();
 
     const response = await this.axios.post<GraphQLResponse<T>>('', {
       query,
@@ -282,7 +305,7 @@ export class InfinityGraphQLClient {
    */
   async mutate<T>(mutation: string, variables?: Record<string, unknown>): Promise<T> {
     // Ensure we have a valid token
-    await this.refreshToken();
+    await this.checkAuthExpiration();
 
     const response = await this.axios.post<GraphQLResponse<T>>('', {
       query: mutation,
