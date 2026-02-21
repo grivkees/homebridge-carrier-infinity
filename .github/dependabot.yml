@@ -1,11 +1,47 @@
-# To get started with Dependabot version updates, you'll need to specify which
-# package ecosystems to update and where the package manifests are located.
-# Please see the documentation for all configuration options:
-# https://help.github.com/github/administering-a-repository/configuration-options-for-dependency-updates
-
 version: 2
 updates:
   - package-ecosystem: "npm"
     directory: "/"
     schedule:
-      interval: "daily"
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      production-dependencies:
+        dependency-type: "production"
+      typescript-eslint:
+        patterns:
+          - "typescript"
+          - "typescript-eslint"
+          - "@typescript-eslint/*"
+          - "eslint"
+          - "eslint-*"
+      jest:
+        patterns:
+          - "jest"
+          - "@types/jest"
+          - "ts-jest"
+      semantic-release:
+        patterns:
+          - "semantic-release"
+          - "@semantic-release/*"
+          - "commitizen"
+          - "@commitlint/*"
+      type-definitions:
+        patterns:
+          - "@types/*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
