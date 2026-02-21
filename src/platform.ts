@@ -10,6 +10,7 @@ import {
 import { EnvSensorAccessory } from './accessory_envsensor';
 import { BaseAccessory } from './accessory_base';
 import { ComfortActivityAccessory } from './accessory_comfort_activity';
+import { WholeHouseActivityAccessory } from './accessory_wholehouse_activity';
 import { InfinityGraphQLClient } from './api/graphql_client';
 import { getZoneDisplayName } from './helpers';
 
@@ -88,6 +89,22 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
         new OutdoorTemperatureAccessory(
           this,
           {...context_system, name: oatName},
+        );
+      }
+
+      // -> System Accessory: Whole House Activity Switches
+      if (this.config['showWholeHouseActivityControls']) {
+        const wholeHouseName = systemCount > 1
+          ? `${systemName} Whole House Activity`
+          : 'Whole House Activity';
+        new WholeHouseActivityAccessory(
+          this,
+          {
+            ...context_system,
+            name: wholeHouseName,
+            holdBehavior: this.config['holdBehavior'],
+            holdArgument: this.config['holdArgument'],
+          },
         );
       }
 
