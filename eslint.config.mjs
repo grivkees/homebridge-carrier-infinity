@@ -100,6 +100,8 @@ export default tseslint.config(
             'loopPumpKwh',
             'looppump',
             'memoization',
+            'microtask',
+            'microtasks',
             'mutex',
             'nonces',
             'oat',

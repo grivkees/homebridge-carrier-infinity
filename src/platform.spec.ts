@@ -356,22 +356,110 @@ describe('CarrierInfinityHomebridgePlatform', () => {
     });
 
     test('handles API errors during discovery gracefully', async () => {
+      jest.useFakeTimers();
       const { platform, log } = createPlatform();
       // Make the refreshToken call inside discoverSystems reject
       platform.infinity_client.refreshToken = jest.fn().mockRejectedValue(new Error('Network failure'));
 
       // discoverSystems will throw, but when called from the didFinishLaunching callback it is caught
       const callback = getDidFinishLaunchingCallback(platform.api as any);
-      await new Promise<void>((resolve) => {
-        // The callback calls discoverSystems().catch() which logs and resolves
-        callback();
-        // Allow async tasks to settle
-        setImmediate(resolve);
-      });
+      callback();
+
+      // Flush the microtask queue to allow the promise rejection chain to settle
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
 
       expect(log.error).toHaveBeenCalledWith(
         expect.stringContaining('Could not discover devices'),
       );
+      jest.useRealTimers();
+    });
+
+    test('logs retry delay and attempt number on discovery failure', async () => {
+      jest.useFakeTimers();
+      const { platform, log } = createPlatform();
+      platform.infinity_client.refreshToken = jest.fn().mockRejectedValue(new Error('API unavailable'));
+
+      const callback = getDidFinishLaunchingCallback(platform.api as any);
+      callback();
+
+      // Flush microtasks so the catch handler runs
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+
+      // Error message should include retry delay (30s for first failure) and attempt number
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('Retrying in 30s'));
+      expect(log.error).toHaveBeenCalledWith(expect.stringContaining('attempt 2'));
+      jest.useRealTimers();
+    });
+
+    test('retries discovery after failure using exponential backoff', async () => {
+      jest.useFakeTimers();
+      const { platform } = createPlatform();
+      platform.infinity_client.refreshToken = jest.fn().mockRejectedValue(new Error('Transient error'));
+
+      const callback = getDidFinishLaunchingCallback(platform.api as any);
+      callback();
+
+      // Flush microtasks for the first attempt to fail and schedule a retry
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+      expect(platform.infinity_client.refreshToken).toHaveBeenCalledTimes(1);
+
+      // Advance 30s — the first retry fires
+      jest.advanceTimersByTime(30_000);
+      expect(platform.infinity_client.refreshToken).toHaveBeenCalledTimes(2);
+
+      // Flush microtasks for the second failure and schedule next retry
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+
+      // Advance 60s — the second retry fires (exponential increase)
+      jest.advanceTimersByTime(60_000);
+      expect(platform.infinity_client.refreshToken).toHaveBeenCalledTimes(3);
+
+      jest.useRealTimers();
+    });
+
+    test('stops retrying once discoverSystems succeeds', async () => {
+      jest.useFakeTimers();
+      const { platform } = createPlatform();
+      // Fail once, then succeed
+      platform.infinity_client.refreshToken = jest.fn()
+        .mockRejectedValueOnce(new Error('Temporary failure'))
+        .mockResolvedValue(undefined);
+
+      const callback = getDidFinishLaunchingCallback(platform.api as any);
+      callback();
+
+      // Flush microtasks for first failure
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+      expect(platform.infinity_client.refreshToken).toHaveBeenCalledTimes(1);
+
+      // Trigger the 30s retry
+      jest.advanceTimersByTime(30_000);
+
+      // Flush microtasks for the successful second attempt
+      for (let i = 0; i < 20; i++) {
+        await Promise.resolve();
+      }
+
+      // Confirm the second attempt ran and no further timer has been scheduled
+      expect(platform.infinity_client.refreshToken).toHaveBeenCalledTimes(2);
+      // Advance well past all retry intervals — no more calls expected
+      jest.advanceTimersByTime(600_000);
+      for (let i = 0; i < 10; i++) {
+        await Promise.resolve();
+      }
+      expect(platform.infinity_client.refreshToken).toHaveBeenCalledTimes(2);
+
+      jest.useRealTimers();
     });
 
     test('stores discovered systems in platform.systems by serial number', async () => {

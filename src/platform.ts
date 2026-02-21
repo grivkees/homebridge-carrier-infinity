@@ -39,9 +39,19 @@ export class CarrierInfinityHomebridgePlatform implements DynamicPlatformPlugin 
     this.infinity_client.refreshToken().then(); // Speed up init by starting login right away
 
     this.api.on('didFinishLaunching', () => {
-      this.discoverSystems().then().catch(error => {
-        this.log.error('Could not discover devices: ' + error.message);
-      });
+      const retryDelays = [30_000, 60_000, 120_000, 240_000];
+      const maxRetryDelay = 300_000;
+      const attempt = (retryCount: number): void => {
+        this.discoverSystems().catch(error => {
+          const delay = retryCount < retryDelays.length ? retryDelays[retryCount] : maxRetryDelay;
+          const delaySeconds = Math.round(delay / 1000);
+          this.log.error(
+            `Could not discover devices: ${error.message}. Retrying in ${delaySeconds}s (attempt ${retryCount + 2})...`,
+          );
+          setTimeout(() => attempt(retryCount + 1), delay);
+        });
+      };
+      attempt(0);
     });
 
     // Note: GraphQL API does not require periodic activate() calls
