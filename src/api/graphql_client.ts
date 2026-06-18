@@ -171,7 +171,7 @@ export class InfinityGraphQLClient {
         this.log.info('Completed login / token refresh successfully.');
         return;
       } catch (error) {
-        this.log.warn('Okta token refresh failed, falling back to assistedLogin:', error);
+        this.log.warn('Okta token refresh failed, falling back to assistedLogin:', error instanceof Error ? error.message : String(error));
         // Fall through to assistedLogin
       }
     }
