@@ -40,8 +40,8 @@ export class ThermostatAccessory extends BaseAccessory {
       this.service.setCharacteristic(this.platform.Characteristic.Name, await this.system.config.getZoneName(this.accessory.context.zone));
       const temp_bounds = await this.system.config.getTempBounds();
       const bound_props = {
-        minValue: Number(convertSystemTemp2CharTemp(temp_bounds[0], await this.system.config.getUnits())),
-        maxValue: Number(convertSystemTemp2CharTemp(temp_bounds[1], await this.system.config.getUnits())),
+        minValue: Number(convertSystemTemp2CharTemp(temp_bounds[0], 'F')),
+        maxValue: Number(convertSystemTemp2CharTemp(temp_bounds[1], 'F')),
       };
       safeSetProps(this.service.getCharacteristic(this.platform.Characteristic.TargetTemperature), bound_props);
       safeSetProps(this.service.getCharacteristic(this.platform.Characteristic.CoolingThresholdTemperature), bound_props);
